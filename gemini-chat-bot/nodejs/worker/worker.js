@@ -1,0 +1,216 @@
+// Workspace Add-on通知用
+import "dotenv/config";
+import express from "express";
+import fetch from "node-fetch";
+import { google } from "googleapis";
+import { GoogleGenerativeAI } from "@google/generative-ai";
+import { Storage } from  "@google-cloud/storage";
+/*
+① ナレッジ連携 (RAG機能)
+社員からの質問を受け取った際、GASがナレッジ用スプレッドシートの全内容（または関連性の高い行）を取得し、Geminiへのプロンプトに結合すること。
+スプレッドシートの構造：[カテゴリ / 質問のキーワード / 詳細な回答・ルール] の3列構成を想定。
+② プロンプトエンジニアリングの指示
+Geminiへのシステムプロンプト（指示文）には以下を盛り込むこと：
+あなたは当社の「管理本部アシスタント」です。
+提供された【社内規定データ】のみに基づいて回答してください。
+データに答えがない場合は、勝手に推測せず「分かりかねるため、直接管理本部へお問い合わせください」と丁寧に回答してください。
+社員の言い回し（例：「身内が亡くなった」）を、規定上の用語（例：「慶弔休暇」）に読み替えて解釈してください。
+③ セキュリティ・プライバシー設定
+学習のオフ： Google AI Studioの有料プラン（Pay-as-you-go）を利用し、入力データがモデルの学習に使用されない設定にすること。
+*/
+
+const SYSTEM_PROMPT = `
+あなたは当社の「管理本部アシスタント」です。
+提供された【社内規定データ】のみに基づいて回答してください。
+データに答えがない場合は、勝手に推測せず
+「分かりかねるため、直接管理本部へお問い合わせください」
+と丁寧に回答してください。
+社員の言い回し（例：「身内が亡くなった」）を、
+規定上の用語（例：「慶弔休暇」）に読み替えて解釈してください。
+`;
+const FIXED_PHRASE = `
+回答は必ず以下の形式で行ってください。
+
+【該当規定】
+（規定名を記載。該当がない場合は「該当なし」）
+
+【回答】
+（規定文をそのまま、または要約して記載）
+
+【補足】
+（必要な場合のみ記載。推測は禁止）
+`;
+let INTERNAL_RULES = `
+【社内規定データ】
+・慶弔休暇：配偶者・一親等親族が亡くなった場合、3日間取得可能
+・有給休暇：入社6か月後より付与
+`; // ← 実際はSpreadsheet等から取得してもOK
+
+/* ========= Express ========== */
+const app = express();
+app.use(express.json());
+
+/* ========= Gemini ========= */
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const model = genAI.getGenerativeModel({
+  //model: "gemini-2.5-flash",
+  model: "gemini-2.5-pro",
+  systemInstruction: {
+    role: "system",
+    parts: [
+      { text: SYSTEM_PROMPT + FIXED_PHRASE }
+    ]
+  }});
+
+/* ========= Google Chat ========= */
+const chatAuth = new google.auth.GoogleAuth({
+  scopes: ["https://www.googleapis.com/auth/chat.bot"]
+});
+
+/* ========= Google Sheets ========= */
+const embedModel = genAI.getGenerativeModel({
+  model: "text-embedding-004",
+})
+/*
+const storage = new Storage();
+const bucket = storage.bucket("gemini-sheet-bucket");
+*/
+const sheetsAuth = new google.auth.GoogleAuth({
+  scopes: ["https://www.googleapis.com/auth/spreadsheets.readonly"]
+});
+//console.log('GOOGLE_APPLICATION_CREDENTIALS=', process.env.GOOGLE_APPLICATION_CREDENTIALS);
+const sheets = google.sheets({ version: "v4", auth: sheetsAuth  });
+
+/* ========= spreadSheetの読み込み ========= */
+async function readFromSheet() {
+  try {
+    console.log("###### readFromSheet start ######");
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: process.env.SPREADSHEET_ID,
+      range: "ナレッジデータ!A2:C"
+    });
+    const rows = response.data.values || [];
+    //console.log("------ rows -----\n", rows);
+    return rows.map(r => r.join(" | ")).join("\n");
+  } catch (err) {
+    console.error("------ エラー発生 ------\n", err);
+  }
+}
+
+/* ========= Chat API 後送 ========= */
+async function sendToChat(spaceName, text) {
+  try {
+    console.log("###### sendToChat start ######");
+    //console.log("------ 回答 -----\n", text);
+    const authClient = await chatAuth.getClient();
+    const accessToken = await authClient.getAccessToken();
+
+    await fetch(
+      `https://chat.googleapis.com/v1/${spaceName}/messages`,
+      {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${accessToken.token}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ text })
+      }
+    );
+  } catch (err) {
+    console.error("------ エラー発生 ------\n", err);
+  }
+}
+
+/* ========= Chat API Endpoint ========= */
+app.post("/", async(req, res) => {
+  try {
+    console.log("###### app.post start ######");
+    const message = Buffer.from(
+      req.body.message.data,
+      "base64"
+    ).toString("utf8");
+    const event = JSON.parse(message);
+    /* ---- ユーザー入力取得（ここが最大の違い） ---- */
+    const messagePayload = event.chat.messagePayload;
+    //console.log("------ messagePayload ------\n", messagePayload);
+    const userMessage = messagePayload?.message?.text;
+    const spaceName = messagePayload?.space?.name;
+    if (!userMessage || !spaceName) {
+      console.error("Message or space missing");
+      await sendToChat(spaceName, "Message or space missing");
+    }
+
+    await sendToChat(spaceName, "確認中です。少々お待ちください。");
+    /* --- Spreadsheet から補足情報を取得 --- */
+    /**/
+    const supplementText = await readFromSheet();
+    const docs =
+      supplementText.length === 0
+      ? "該当なし"
+      : supplementText;
+    INTERNAL_RULES =  `
+    【社内規定データ】
+    ${docs}
+    `;
+    /**/
+    const result = await model.generateContent({
+        contents: [
+            {
+            role: "user",
+            parts: [
+                {
+                text: INTERNAL_RULES + "\n\n【質問】\n" + userMessage
+                }
+            ]
+            }
+        ]
+    });
+    const answer = result.response.text();
+    /* --- Chat API で後送 --- */
+    await sendToChat(spaceName, answer);
+
+    res.status(204).send(); // Pub/Sub ACK
+
+  } catch (err) {
+    console.error("------ エラー発生 ------\n", err);
+    //console.error("ERROR:", err);
+    //await sendToChat(spaceName, "エラーが発生しました。管理本部へお問い合わせください。");
+  }
+});
+
+/* ========= Server ========= */
+/**/
+const port = process.env.PORT || 8080;
+app.listen(port, () => {
+  console.log(`Google Chat bot listening on port ${port}`);
+});
+/**/
+
+/* ========= テスト ======== */
+/*
+const supplementText = await readFromSheet();
+const question = "喫煙環境はどうなっているでしょうか？";
+const docs =
+  supplementText.length === 0
+  ? "該当なし"
+  : supplementText;
+INTERNAL_RULES =  `
+【社内規定データ】
+${docs}
+`;
+console.log("------ INTERNAL_RULES ------ \n", INTERNAL_RULES);
+const result = await model.generateContent({
+    contents: [
+        {
+        role: "user",
+        parts: [
+            {
+            text: INTERNAL_RULES + "\n\n【質問】\n" + question
+            }
+        ]
+        }
+    ]
+});
+const answer = result.response.text();
+console.log("------ answer ------\n", answer);
+*/

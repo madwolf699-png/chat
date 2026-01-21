@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Gemini Chat Demo</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      background-color: #f0f0f0;
+    }
+
+    #chatBox {
+      flex: 1;
+      padding: 10px;
+      overflow-y: auto;
+    }
+
+    #inputArea {
+      display: flex;
+      padding: 10px;
+      border-top: 1px solid #ccc;
+      background-color: #fff;
+    }
+
+    #message {
+      flex: 1;
+      padding: 10px;
+      font-size: 14px;
+      border-radius: 20px;
+      border: 1px solid #ccc;
+      outline: none;
+      resize: none;
+      overflow: hidden;
+      line-height: 1.4em;
+      max-height: 200px;
+    }
+
+    #sendBtn {
+      padding: 10px 20px;
+      margin-left: 10px;
+      border: none;
+      border-radius: 20px;
+      background-color: #1976d2;
+      color: white;
+      cursor: pointer;
+    }
+
+    .message {
+      display: flex;
+      margin-bottom: 10px;
+    }
+
+    .message .bubble {
+      padding: 10px 15px;
+      border-radius: 15px;
+      max-width: 70%;
+      position: relative;
+      word-break: break-word;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+      white-space: pre-wrap; /* ←改行を保持 */
+    }
+
+    .user {
+      justify-content: flex-end;
+    }
+
+    .user .bubble {
+      background-color: #1976d2;
+      color: white;
+      border-bottom-right-radius: 0;
+    }
+
+    .bot {
+      justify-content: flex-start;
+    }
+
+    .bot .bubble {
+      background-color: #e0e0e0;
+      color: #000;
+      border-bottom-left-radius: 0;
+    }
+
+    .time {
+      font-size: 10px;
+      color: #666;
+      margin-top: 3px;
+      text-align: right;
+    }
+  </style>
+</head>
+<body>
+  <div id="chatBox"></div>
+  <div id="inputArea">
+    <textarea id="message" placeholder="メッセージを入力" rows="1"></textarea>
+    <button id="sendBtn">送信</button>
+  </div>
+
+  <script>
+    const chatBox = document.getElementById('chatBox');
+    const messageInput = document.getElementById('message');
+    const sendBtn = document.getElementById('sendBtn');
+
+    // テキストエリア自動高さ調整
+    function adjustHeight(el){
+      el.style.height = 'auto';
+      el.style.height = el.scrollHeight + 'px';
+    }
+
+    messageInput.addEventListener('input', () => adjustHeight(messageInput));
+
+    // 改行を保持して表示
+    function formatText(text){
+      return text.replace(/\n/g, '\n'); // pre-wrapでHTMLに反映される
+    }
+
+    function appendMessage(type, text, time) {
+      const div = document.createElement('div');
+      div.className = 'message ' + type;
+
+      const bubble = document.createElement('div');
+      bubble.className = 'bubble';
+      //bubble.textContent = text; // 改行はCSSの pre-wrap で有効
+
+      const content = document.createElement('div');
+      content.className = 'content';
+      content.textContent = text;
+
+      const ts = document.createElement('div');
+      ts.className = 'time';
+      ts.textContent = time;
+
+      bubble.appendChild(content);
+      bubble.appendChild(ts);
+      div.appendChild(bubble);
+      chatBox.appendChild(div);
+      chatBox.scrollTop = chatBox.scrollHeight;
+      
+      return { content, ts }; // ← 後で書き換えるため返す
+    }
+
+    function sendMessage() {
+      const message = messageInput.value.trim();
+      if(!message) return;
+
+      messageInput.value = '';
+      adjustHeight(messageInput); // 高さリセット
+
+      // 時刻（即時表示用）
+      const now = new Date();
+      const time = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+      // ① ユーザーメッセージを即時表示
+      appendMessage('user', message, time);
+
+      // ② Botの「処理中…」メッセージを先に表示
+      const botUI = appendMessage('bot', '処理中', '');
+      let dots = 0;
+      const timer = setInterval(() => {
+        dots = (dots + 1) % 4;
+        botUI.content.textContent = '処理中' + '.'.repeat(dots);
+      }, 500);
+
+      // ③ 非同期でGASを呼ぶ
+      google.script.run
+        .withSuccessHandler(function (res) {
+          clearInterval(timer);
+          // 処理中 → 実際のレスポンスに置き換え
+          botUI.content.textContent = res.bot.text;
+          botUI.ts.textContent = res.bot.time;
+        })
+        .withFailureHandler(function (err) {
+          clearInterval(timer);
+          botUI.content.textContent = 'エラーが発生しました';
+          console.error(err);
+        })
+        .sendMessage(message);
+    }
+
+    // Enterで送信、Shift+Enterで改行
+    messageInput.addEventListener('keydown', function(e){
+      if(e.key === 'Enter' && !e.shiftKey){
+        e.preventDefault();
+        sendMessage();
+      }
+    });
+
+    sendBtn.addEventListener('click', sendMessage);
+  </script>
+</body>
+</html>
+
