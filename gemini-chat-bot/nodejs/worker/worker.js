@@ -125,6 +125,10 @@ async function sendToChat(spaceName, text) {
 app.post("/", async(req, res) => {
   try {
     console.log("###### app.post start ######");
+    res
+    .status(200)
+    .set("Content-Type", "application/json")
+    .send("{}");
     const message = Buffer.from(
       req.body.message.data,
       "base64"
