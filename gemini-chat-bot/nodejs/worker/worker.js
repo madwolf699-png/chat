@@ -151,6 +151,7 @@ let segmenter = new TinySegmenter();
 */
 async function searchRules(rules, question) {
   console.log("###### searchRules start ######");
+  //console.log("----- question ------\n", question)
   const keywords = await tokenize(question);  // kuromoji
   //const keywords = segmenter.segment(question); // TinySegmenter
   //console.log("----- keywords ------\n", keywords)

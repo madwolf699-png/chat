@@ -380,3 +380,9 @@ sudo apt install npm
   もしくは
   npm install tiny-segmenter
   ```
+
+## Google API Key
+- モデル一覧の確認
+  ```bash
+  curl -X GET https://generativelanguage.googleapis.com/v1beta/models?key=XXXXXX
+  ```
