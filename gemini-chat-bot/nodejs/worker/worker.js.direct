@@ -5,8 +5,6 @@ import fetch from "node-fetch";
 import { google } from "googleapis";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { Storage } from  "@google-cloud/storage";
-import kuromoji from "kuromoji";
-//import TinySegmenter from "tiny-segmenter";
 /*
 ① ナレッジ連携 (RAG機能)
 社員からの質問を受け取った際、GASがナレッジ用スプレッドシートの全内容（または関連性の高い行）を取得し、Geminiへのプロンプトに結合すること。
@@ -84,93 +82,19 @@ const sheetsAuth = new google.auth.GoogleAuth({
 const sheets = google.sheets({ version: "v4", auth: sheetsAuth  });
 
 /* ========= spreadSheetの読み込み ========= */
-let cachedRules = null;
 async function readFromSheet() {
   try {
     console.log("###### readFromSheet start ######");
-    if (cachedRules) return cachedRules;
-
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: process.env.SPREADSHEET_ID,
       range: "ナレッジデータ!A2:C"
     });
     const rows = response.data.values || [];
     //console.log("------ rows -----\n", rows);
-    cachedRules = rows.map(row => ({
-      category: row[0],
-      title: row[1],
-      body: row[2]
-    }));
-    return cachedRules;
+    return rows.map(r => r.join(" | ")).join("\n");
   } catch (err) {
     console.error("------ エラー発生 ------\n", err);
   }
-}
-await readFromSheet();
-/**/
-let tokenizerPromise = null;
-async function initTokenizer() {
-  console.log("###### initTokenizer start ######");
-  if (!tokenizerPromise) {
-    tokenizerPromise = new Promise((resolve, reject) => {
-      kuromoji.builder({
-        dicPath: "node_modules/kuromoji/dict"
-      }).build((err, tokenizer) => {
-        if (err) {
-          //console.log("------ err ------\n", err);
-          reject(err);
-        } else {
-          //console.log("------ tokenizer ------\n", tokenizer);
-          resolve(tokenizer);
-        }
-      })
-    })
-  }
-  return tokenizerPromise;
-}
-await initTokenizer();
-async function tokenize(text) {
-  console.log("###### tokenize start ######");
-  if (!text || typeof text != "string") return [];
-  const tokenizer = await initTokenizer();
-  const tokens = tokenizer.tokenize(text);
-  //console.log("------ tokens ------\n", tokens);
-  const keywords = tokens
-  .filter(t =>
-     t.pos === "名詞"
-     // ||
-     //(t.pos === "動詞" && t.basic_form)
-    )
-  .map(t => t.basic_form || t.surface_form);
-  return keywords;
-  //return tokens.map(t => t.surface_form);
-}
-/**/
-/*
-let segmenter = new TinySegmenter();
-*/
-async function searchRules(rules, question) {
-  console.log("###### searchRules start ######");
-  const keywords = await tokenize(question);  // kuromoji
-  //const keywords = segmenter.segment(question); // TinySegmenter
-  //console.log("----- keywords ------\n", keywords)
-  const related = rules.filter(r =>
-    keywords.some(k =>
-    (r.title + r.body).includes(k)
-    )
-  ).slice(0, 10);
-  //console.log("----- related ------\n", related);
-  
-  const result =
-    related.length == 0
-    ?
-    "該当する社内規定が見つかりませんでした。"
-    :
-    related.map(r =>
-      `■ ${r.title}\n${r.body}`
-    ).join("\n\n")
-    ;
-  return result;
 }
 
 /* ========= Chat API 後送 ========= */
@@ -224,16 +148,17 @@ app.post("/", async(req, res) => {
     await sendToChat(spaceName, "確認中です。少々お待ちください。");
     /* --- Spreadsheet から補足情報を取得 --- */
     /**/
-    const rules = await readFromSheet();
-    // speadSheeetの内容から簡易検索
-    const related  = await searchRules(rules, userMessage);
-    //console.log("------ related ------\n", related);
+    const supplementText = await readFromSheet();
+    // speadSheeetの内容をそのまま使用
+    const docs =
+      supplementText.length === 0
+      ? "該当なし"
+      : supplementText;
     INTERNAL_RULES =  `
     【社内規定データ】
-    ${related}
+    ${docs}
     `;
     /**/
-    console.log("------ Gemini API start ------");
     const result = await model.generateContent({
         contents: [
             {
@@ -247,7 +172,6 @@ app.post("/", async(req, res) => {
         ]
     });
     const answer = result.response.text();
-    console.log("------ Gemini API end ------");
     /* --- Chat API で後送 --- */
     await sendToChat(spaceName, answer);
 
@@ -259,38 +183,28 @@ app.post("/", async(req, res) => {
     //await sendToChat(spaceName, "エラーが発生しました。管理本部へお問い合わせください。");
   }
 });
-/* ========= 管理者用 ========= */
-app.post("/reload", async(req, res) => {
-  try {
-    cachedRules = null;
-    await readFromSheet();
-    res.send("reloaded");
-  } catch (err) {
-    console.error("------ エラー発生 ------\n", err);
-  }
-});
 
 /* ========= Server ========= */
 /**/
 const port = process.env.PORT || 8080;
 app.listen(port, () => {
-  console.log(`Google Chat Worker listening on port ${port}`);
+  console.log(`Google Chat bot listening on port ${port}`);
 });
 /**/
 
 /* ========= テスト ======== */
 /*
-const rules = await readFromSheet();
-//const question = "長期休暇を取りたいのですが";
-const question = "喫煙は大丈夫ですか";
-const related  = await searchRules(rules, question);
-console.log("------ related ------\n", related);
+const supplementText = await readFromSheet();
+const question = "喫煙環境はどうなっているでしょうか？";
+const docs =
+  supplementText.length === 0
+  ? "該当なし"
+  : supplementText;
 INTERNAL_RULES =  `
 【社内規定データ】
-${related}
+${docs}
 `;
 console.log("------ INTERNAL_RULES ------ \n", INTERNAL_RULES);
-console.log("------ Gemini API start ------");
 const result = await model.generateContent({
     contents: [
         {
@@ -304,6 +218,5 @@ const result = await model.generateContent({
     ]
 });
 const answer = result.response.text();
-console.log("------ Gemini API end ------");
 console.log("------ answer ------\n", answer);
 */

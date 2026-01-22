@@ -89,6 +89,20 @@ sudo apt install npm
     --member="serviceAccount:service-123456789012@gcp-sa-chat.iam.gserviceaccount.com" \
     --role="roles/run.invoker"
   ```
+- サービス一覧を確認
+  ```bash
+  gcloud run services list --region asia-northeast1
+  ```
+
+- サービスを削除
+  ```bash
+  gcloud run services delete nodejs \
+  --region asia-northeast1
+  確認なしで削除
+  gcloud run services delete nodejs \
+  --region asia-northeast1 \
+  --quiet
+  ```
 
 ## Google Cloud 側の準備（重要）
 - 有効化する API
@@ -351,4 +365,18 @@ sudo apt install npm
   --member="serviceAccount:chat-bot-sa@gemini-chat-bot-484323.iam.gserviceaccount.com" \
   --role="roles/storage.objectAdmin"
 
+  ```
+
+## spreadSHeetのリロード
+  ```bash
+  TOKEN=$(gcloud auth print-identity-token)
+  curl -X POST -H "Authorization: Bearer $TOKEN" \
+  https://chat-worker-750317593501.asia-northeast1.run.app/reload
+  ```
+
+## 日本語の形態素解析
+  ```bash
+  npm install kuromoji
+  もしくは
+  npm install tiny-segmenter
   ```
