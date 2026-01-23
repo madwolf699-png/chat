@@ -10,13 +10,16 @@ Google Chat API
    ▼
 Cloud Run（Bot入口）
    │  即レスポンス
-   ├── res.json({ text: "確認中です" })
+   ├── res.status(200).send({})
    │
    │ ② 非同期キュー
    ▼
 Pub/Sub / Cloud Tasks
+   ├─ res.status(200).send({})
+   ├─ Chat API レスポンス({ text: "確認中です" })
+   ├─ Google Spread Sheets API 読み書き
+   ├─ RAG処理(kuromoji)
    ├─ Gemini API 呼び出し
-   ├─ Google Sheets API 読み書き
    └─ Chat API レスポンス(JSON)
    │
    ▼
@@ -331,6 +334,18 @@ sudo apt install npm
     resource.labels.service_name="gemini-chat-bot"' \
     --limit 50
   ```
+- Cloud Runはコールドスタート
+  - 無通信だと15〜20分程度で停止状態になる
+  - 最小インスタンス数を1にするか、定期的にアクセスする。
+  -　最小インスタンス数を1にする
+    - Cloud Runの該当サービスの画面で「新しいリビジョンの編集とデプロイ」を選択
+    - 「リビジョンスケーリング」タブでインスタンス最小数を1に設定
+  - gcloudコマンドで設定
+    ```bash
+    gcloud run services update chat-worker \
+      --min-instance 1 \
+      --region asia-northeast1
+    ```
 
 ## spreadSheetの環境設定
 - Cloud RunでspreadSheetを扱うには、該当のspreadSHeetに対して以下のサービスアカウントを共有の権限として設定する必要がある。
