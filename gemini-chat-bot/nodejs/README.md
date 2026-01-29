@@ -200,7 +200,11 @@ sudo apt install npm
    ├  ├ package.json
    ├  └ Dockerfile
    ├ worker/
-       ├ index.js        ← ★ここに ChPub/Subt Task の処理を書く
+   ├  ├ index.js        ← ★ここに ChPub/Subt Task の処理を書く
+   ├  ├ package.json
+   ├  └ Dockerfile
+   ├ reload/
+       ├ index.js        ← ★ここに SpreadSheet Reload の処理を書く
        ├ package.json
        └ Dockerfile
   ```
@@ -289,6 +293,7 @@ sudo apt install npm
 
 ## Cloud Runによる開発(Worker（非同期処理用 Cloud Run）)
   ```bash
+  cd gemini-chat-bot/nodejs/worker
   gcloud run deploy chat-worker \
     --source . \
     --region asia-northeast1 \
@@ -297,8 +302,6 @@ sudo apt install npm
     --set-env-vars \
     GEMINI_API_KEY=AIzaSyxxxxxxxxxxxx,SPREADSHEET_ID=1AbCdEfGhIjKlMnOp
   ```
-
-## Cloud Runによる開発(IAM 設定（重要）)
   ```bash
   gcloud run services add-iam-policy-binding chat-worker \
     --region asia-northeast1 \
@@ -306,7 +309,27 @@ sudo apt install npm
     --role="roles/run.invoker"
   
   gcloud pubsub subscriptions describe chat-worker-sub
+  ```
 
+## Cloud Runによる開発(Reload（非同期処理用 Cloud Run）)
+  ```bash
+  cd gemini-chat-bot/nodejs/reload
+  gcloud run deploy chat-reload \
+    --source . \
+    --region asia-northeast1 \
+    --service-account chat-bot-sa@gemini-chat-bot-484323.iam.gserviceaccount.com \
+    --allow-unauthenticated \
+    --set-env-vars \
+    TARGET_URL=https://chat-worker-750317593501.asia-northeast1.run.app/reload
+  ```
+  ```bash
+  gcloud run services add-iam-policy-binding chat-reload \
+    --region asia-northeast1 \
+    --member="serviceAccount:chat-bot-sa@gemini-chat-bot-484323.iam.gserviceaccount.com" \
+    --role="roles/run.invoker"
+  ```
+
+## Cloud Runによる開発(IAM 設定（重要）)
   以下はとりあえず不要
   gcloud projects add-iam-policy-binding PROJECT_ID \
     --member="serviceAccount:chat-bot-sa@PROJECT_ID.iam.gserviceaccount.com" \
