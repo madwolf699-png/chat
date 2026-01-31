@@ -291,6 +291,16 @@ sudo apt install npm
   gcloud pubsub topics create chat-worker-topic
   ```
 
+## Cloud Runによる開発(Bot（非同期処理用 Cloud Run）)
+  ```bash
+  cd gemini-chat-bot/nodejs/bot
+  gcloud run deploy chat-bot \
+    --source . \
+    --region asia-northeast1 \
+    --service-account chat-bot-sa@gemini-chat-bot-484323.iam.gserviceaccount.com \
+    --allow-unauthenticated
+  ```
+
 ## Cloud Runによる開発(Worker（非同期処理用 Cloud Run）)
   ```bash
   cd gemini-chat-bot/nodejs/worker
@@ -300,7 +310,7 @@ sudo apt install npm
     --service-account chat-bot-sa@gemini-chat-bot-484323.iam.gserviceaccount.com \
     --no-allow-unauthenticated \
     --set-env-vars \
-    GEMINI_API_KEY=AIzaSyxxxxxxxxxxxx,SPREADSHEET_ID=1AbCdEfGhIjKlMnOp
+    GEMINI_API_KEY=AIzaSyxxxxxxxxxxxx,SPREADSHEET_ID=1AbCdEfGhIjKlMnOp,FIRESTORE_DOC=
   ```
   ```bash
   gcloud run services add-iam-policy-binding chat-worker \
@@ -330,12 +340,13 @@ sudo apt install npm
   ```
 
 ## Cloud Runによる開発(IAM 設定（重要）)
+  ```bash
   以下はとりあえず不要
   gcloud projects add-iam-policy-binding PROJECT_ID \
     --member="serviceAccount:chat-bot-sa@PROJECT_ID.iam.gserviceaccount.com" \
     --role="roles/chat.bot"
 
-  以下はとりあえず不要
+  以下は場合によって必要★
   gcloud projects add-iam-policy-binding PROJECT_ID \
     --member="serviceAccount:chat-bot-sa@PROJECT_ID.iam.gserviceaccount.com" \
     --role="roles/pubsub.publisher"
@@ -382,6 +393,26 @@ sudo apt install npm
   export GOOGLE_APPLICATION_CREDENTIALS=~/gemini-chat-bot-484323-40688e7b7c37.json
   node worker.js
   ```
+
+## Firestreの環境設定
+  ```bash
+  npm install @google-cloud/firestore
+  ```
+  ```bash
+  gcloud projects add-iam-policy-binding [PROJECT] \
+    --member="serviceAccount:chat-bot-sa@gemini-chat-bot-484323.iam.gserviceaccount.com" \
+    --role="roles/datastore.user"
+
+  gcloud projects get-iam-policy gemini-chat-bot-484323 \
+    --flatten="bindings[].members" \
+    --filter="bindings.members:chat-bot-sa@gemini-chat-bot-484323.iam.gserviceaccount.com" \
+    --format="table(bindings.role)"
+
+  再デプロイ
+
+  https://console.firebase.google.com/u/1/project/gemini-chat-bot-484323/firestore/databases/-default-/data/~2Fchat_logs
+  ```
+
 ## Cloud Storageの環境設定
 - バケットの確認
   ```bash
@@ -405,7 +436,7 @@ sudo apt install npm
 
   ```
 
-## spreadSHeetのリロード
+## spreadSheetのリロード
   ```bash
   TOKEN=$(gcloud auth print-identity-token)
   curl -X POST -H "Authorization: Bearer $TOKEN" \
