@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <style>
+      body { font-family: 'Helvetica Neue', Arial, sans-serif; padding: 20px; text-align: center; color: #333; }
+      .screen { display: none; }
+      .active { display: block; }
+      .nav-bar { background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #ddd; }
+      select, button { padding: 10px; border-radius: 4px; border: 1px solid #ccc; cursor: pointer; }
+      button { background-color: #4285F4; color: white; border: none; margin: 5px; }
+      button.secondary { background-color: #34a853; }
+      button.tertiary { background-color: #ff3300; }
+      button.back { background-color: #666; }
+      #loading { color: #666; height: 20px; visibility: hidden; }
+    </style>
+    <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
+    <script type="text/javascript">
+      google.charts.load('current', {'packages':['corechart']});
+
+      // 画面切り替え関数
+      function showScreen(screenId) {
+        document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+        document.getElementById(screenId).classList.add('active');
+        
+        if (screenId === 'keyword_screen') {
+          onKeywordChange(); // キーワード画面に移ったら初期表示
+        } else if (screenId === 'answer_screen') {
+          loadAnswerChart(); // 回答傾向画面に移ったら表示
+        } else if (screenId === 'status_screen') {
+          loadStatusChart(); // 異常終了画面に移ったら表示
+        }
+      }
+
+      // キーワード推移の取得
+      function onKeywordChange() {
+        var word = document.getElementById('keywordSelect').value;
+        showLoading(true);
+        google.script.run.withSuccessHandler(drawKeyword).getKeywordData(word);
+      }
+
+      // 回答傾向の取得
+      function loadAnswerChart() {
+        showLoading(true);
+        google.script.run.withSuccessHandler(drawAnswer).getAnswerData();
+      }
+
+      // 異常終了の取得
+      function loadStatusChart() {
+        showLoading(true);
+        google.script.run.withSuccessHandler(drawStatus).getStatusData();
+      }
+
+      function drawKeyword(res) {
+        draw(res, 'keyword_chart_div');
+      }
+
+      function drawAnswer(res) {
+        draw(res, 'answer_chart_div');
+      }
+
+      function drawStatus(res) {
+        draw(res, 'status_chart_div');
+      }
+
+      function draw(res, divId) {
+        showLoading(false);
+        var chartData = google.visualization.arrayToDataTable(res.data);
+        var options = {
+          title: res.title,
+          curveType: 'function',
+          legend: { position: 'bottom' },
+          hAxis: { title: '日付', slantedText: true },
+          vAxis: { title: '件数', minValue: 0, format: '0' },
+          pointSize: 7,
+          animation: { startup: true, duration: 500, easing: 'out' }
+        };
+        var chart = new google.visualization.LineChart(document.getElementById(divId));
+        chart.draw(chartData, options);
+      }
+
+      function showLoading(isLoading) {
+        document.getElementById('loading').style.visibility = isLoading ? 'visible' : 'hidden';
+      }
+
+      // 初回起動時
+      google.charts.setOnLoadCallback(() => showScreen('menu_screen'));
+    </script>
+  </head>
+  <body>
+    <h1>Gemini Chat Bot 統計ダッシュボード</h1>
+    <div id="loading">集計中...</div>
+
+    <div id="menu_screen" class="screen active">
+      <div class="nav-bar">
+        <p>表示したい統計データを選択してください</p>
+        <button onclick="showScreen('keyword_screen')">キーワード別の推移</button>
+        <button class="secondary" onclick="showScreen('answer_screen')">問題解決の回答傾向の推移</button>
+        <button class="tertiary" onclick="showScreen('status_screen')">異常終了の推移</button>
+      </div>
+    </div>
+
+    <div id="keyword_screen" class="screen">
+      <div class="nav-bar">
+        <button class="back" onclick="showScreen('menu_screen')">← 戻る</button>
+        <span> キーワード別の推移: </span>
+        <select id="keywordSelect" onchange="onKeywordChange()">
+          <!-- option value="すべて">すべて</option -->
+          <option value="該当なし">該当なし</option>
+          <option value="親族の不幸">親族の不幸（慶弔休暇）</option>
+          <option value="有給休暇">有給休暇の付与</option>
+          <option value="夏期休暇">夏期休暇</option>
+          <option value="通勤手当">通勤手当</option>
+          <option value="喫煙所">喫煙所</option>
+          <option value="結婚の報告">結婚の報告</option>
+          <option value="PCの故障">PCの故障</option>
+          <option value="分別のルール">分別のルール</option>
+          <option value="フレックス">フレックス</option>
+          <option value="インシデント">インシデントの報告</option>
+          <option value="転居">転居（引っ越し）</option>
+          <option value="氏名を変更">氏名を変更したとき</option>
+          <option value="被扶養者">被扶養者の異動があったとき</option>
+          <option value="給与振込口座">給与振込口座を変更したいとき</option>
+          <option value="勤務表">勤務表について</option>
+          <option value="月次提出書類">月次提出書類一式について</option>
+          <option value="交通費">交通費を申請</option>
+          <option value="出張費">出張費を申請</option>
+          <option value="経費">経費を申請</option>
+          <option value="通勤費が変更">通勤費が変更</option>
+          <option value="慶弔金">慶弔金を申請</option>
+          <option value="特別休暇">特別休暇を申請</option>
+          <option value="産休・育休">産休・育休</option>
+        </select>
+      </div>
+      <div id="keyword_chart_div" style="width: 100%; height: 500px"></div>
+    </div>
+
+    <div id="answer_screen" class="screen">
+      <div class="nav-bar">
+        <button class="back" onclick="showScreen('menu_screen')">← 戻る</button>
+        <span style="font-weight: bold; margin-left: 10px;">問題解決の回答傾向の推移</span>
+      </div>
+      <div id="answer_chart_div" style="width: 100%; height: 500px"></div>
+    </div>
+
+    <div id="status_screen" class="screen">
+      <div class="nav-bar">
+        <button class="back" onclick="showScreen('menu_screen')">← 戻る</button>
+        <span style="font-weight: bold; margin-left: 10px;">異常終了の推移</span>
+      </div>
+      <div id="status_chart_div" style="width: 100%; height: 500px"></div>
+    </div>
+
+  </body>
+</html>
