@@ -1,5 +1,5 @@
 function onButtonClick_reload() {
-  const url = 'https://chat-reload-750317593501.asia-northeast1.run.app';
+  const url = 'https://chat-external-750317593501.asia-northeast1.run.app/reload';
 
   const res = UrlFetchApp.fetch(url, {
     method: 'get',

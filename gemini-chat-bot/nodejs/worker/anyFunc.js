@@ -7,6 +7,7 @@ import kuromoji from "kuromoji";
 //import TinySegmenter from "tiny-segmenter";
 import { Firestore } from "@google-cloud/firestore";
 //import admin from "firebase-admin";
+//import {GoogleAuth} from "google-auth-library";
 
 /*
 ① ナレッジ連携 (RAG機能)
@@ -80,16 +81,47 @@ const sheetsAuth = new google.auth.GoogleAuth({
 //console.log('GOOGLE_APPLICATION_CREDENTIALS=', process.env.GOOGLE_APPLICATION_CREDENTIALS);
 const sheets = google.sheets({ version: "v4", auth: sheetsAuth  });
 
-const fireSore = new Firestore({ maxRetries: 0, timeout: 3000 });
+console.log("FIRESTORE_DOC=", process.env.FIRESTORE_DOC);
+console.log("PROJECT_ID=", process.env.PROJECT_ID);
+//console.log("SERVICE=", process.env.K_SERVICE);
+//console.log("REVISION=", process.env.K_REVISION);
+
+const db = new Firestore({
+  maxRetries: 0,
+  timeout: 3000,
+  projectId: process.env.PROJECT_ID,
+  databaseId: "(default)",
+  preferRest: true,
+});
 /*
-//if (!admin.apps.length) {
-  admin.initializeApp();
-//}
-export const fireSore = admin.firestore();
+await db.collection("_healthcheck").add({
+  ok: true,
+  at: new Date()
+});
+*/
+/*
+admin.initializeApp({
+  projectId: process.env.PROJECT_ID,
+  credential:  admin.credential.applicationDefault(),
+});
+export const db = admin.firestore();
+db.settings({
+  databaseId: "(default)",
+});
+*/
+/*
+const auth = new GoogleAuth();
+const projectId = await auth.getProjectId();
+console.log("AUTH projectId: ", projectId);
+const res = await fetch("https://firestore.googleapis.com");
+console.log("status: ", res.status);
 */
 
 /* ========= spreadSheetの読み込み ========= */
 let cachedRules = null;
+export function setCachedRules(newValue){
+  cachedRules = newValue;
+}
 export async function readFromSheet() {
   console.log("###### readFromSheet start ######");
   if (cachedRules) return cachedRules;
@@ -238,7 +270,7 @@ export async function saveMessage(msg) {
     sendedAt: "",
     updatedAt: ""
   }
-  return await fireSore.collection(process.env.FIRESTORE_DOC).add(doc);
+  return await db.collection(process.env.FIRESTORE_DOC).add(doc);
 }
 
 export async function saveResponse(docRef, res) {
@@ -251,7 +283,7 @@ export async function saveResponse(docRef, res) {
     { merge: true }
   );
 /*
-  await fireSore.collection(process.env.FIRESTORE_DOC)
+  await db.collection(process.env.FIRESTORE_DOC)
     .doc(docRef.id)
     .update({
       response: res, 
@@ -275,11 +307,11 @@ export async function saveError(docRef, err) {
   );
 }
 
-export let docRef;
+//export let docRef;
 
 export async function saveChat(receivedAt, msg, answer, err, status) {
   console.log("###### saveChat start ######");
-  docRef = null;
+  //docRef = null;
   const doc = {
     request: {
       spaceName: msg?.space?.name,
@@ -294,11 +326,23 @@ export async function saveChat(receivedAt, msg, answer, err, status) {
         stack: err?.stack?.slice(0, 2000) ?? null
       } : {},
     status: status,
+    isHit: answer.includes("該当なし") ? false : true,
+    answer: "",
     receivedAt: receivedAt,
     sendedAt: answer ? new Date() : "",
     updatedAt: answer || err  ? new Date() : ""
   }
-  docRef = fireSore.collection(process.env.FIRESTORE_DOC).add(doc);
+  return await db.collection(process.env.FIRESTORE_DOC).add(doc);
+}
+
+export async function saveAnswer(docRef, answer) {
+  await docRef.set(
+    {
+      answer: answer,
+      updatedAt: new Date()
+    },
+    { merge: true }
+  );
 }
 
 export function setConfirm(docRef) {
@@ -370,7 +414,7 @@ export function setConfirm(docRef) {
                 widgets: [
                   {
                     textParagraph: {
-                      text: "この問題は解決しましたか？\n「はい」か「いいえ」でお答えください。"
+                      text: "この問題は解決しましたか？\n「はい」か「いいえ」を入力してお答えください。\n（「」は不要です）"
                     }
                   },
                 ]

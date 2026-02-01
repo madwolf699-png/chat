@@ -8,7 +8,7 @@ app.use(express.json());
 const TARGET_URL = process.env.TARGET_URL;
 //const TARGET_URL = 'https://chat-worker-750317593501.asia-northeast1.run.app/reload';
 
-app.get('/', async (req, res) => {
+app.get('/reload', async (req, res) => {
   try {
     // IDトークン生成（audience 指定）
     const auth = new GoogleAuth();

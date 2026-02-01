@@ -203,7 +203,7 @@ sudo apt install npm
    ├  ├ index.js        ← ★ここに ChPub/Subt Task の処理を書く
    ├  ├ package.json
    ├  └ Dockerfile
-   ├ reload/
+   ├ external/
        ├ index.js        ← ★ここに SpreadSheet Reload の処理を書く
        ├ package.json
        └ Dockerfile
@@ -321,10 +321,10 @@ sudo apt install npm
   gcloud pubsub subscriptions describe chat-worker-sub
   ```
 
-## Cloud Runによる開発(Reload（非同期処理用 Cloud Run）)
+## Cloud Runによる開発(External（非同期処理用 Cloud Run）)
   ```bash
-  cd gemini-chat-bot/nodejs/reload
-  gcloud run deploy chat-reload \
+  cd gemini-chat-bot/nodejs/external
+  gcloud run deploy chat-external \
     --source . \
     --region asia-northeast1 \
     --service-account chat-bot-sa@gemini-chat-bot-484323.iam.gserviceaccount.com \
@@ -333,7 +333,7 @@ sudo apt install npm
     TARGET_URL=https://chat-worker-750317593501.asia-northeast1.run.app/reload
   ```
   ```bash
-  gcloud run services add-iam-policy-binding chat-reload \
+  gcloud run services add-iam-policy-binding chat-external \
     --region asia-northeast1 \
     --member="serviceAccount:chat-bot-sa@gemini-chat-bot-484323.iam.gserviceaccount.com" \
     --role="roles/run.invoker"
@@ -410,8 +410,18 @@ sudo apt install npm
 
   再デプロイ
 
+  https://console.cloud.google.com/firestore
+
   https://console.firebase.google.com/u/1/project/gemini-chat-bot-484323/firestore/databases/-default-/data/~2Fchat_logs
+
+  gcloud firestore databases delete --project=gemini-chat-bot-484323
   ```
+- Google Cloud Consoleにて以下の作業が必要
+  - 検索でFirestoreを入力してFirestore Studioにでデータベースを作成
+  - それかCloud Shellターミナルを出力して、以下のコマンドでデータベースを作成
+    ```bash
+    gcloud firestore databases create --location=asia-notheast1 --database="(default)"
+    ```
 
 ## Cloud Storageの環境設定
 - バケットの確認

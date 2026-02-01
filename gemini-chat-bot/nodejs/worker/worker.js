@@ -2,25 +2,27 @@
 import "dotenv/config";
 import express from "express";
 import {
+  setCachedRules,
   readFromSheet,
   searchRules,
   saveChat,
   geminiApi,
   sendToChat,
   setConfirm,
-  //docRef
+  saveAnswer,
 } from "./anyFunc.js";
 
 /* ========= Express ========== */
 const app = express();
 app.use(express.json());
 
+let docRef = null;
+
 /* ========= Chat API Endpoint ========= */
 app.post("/", async(req, res) => {
   let receivedAt;
   let messagePayload;
   let answer;
-  //docRef = null;
   try {
     console.log("###### app.post start ######");
     receivedAt = new Date();
@@ -44,20 +46,25 @@ app.post("/", async(req, res) => {
       await sendToChat(spaceName, "Message or space missing");
     }
 
-    await sendToChat(spaceName, { text: "確認中です。少々お待ちください。" });
-    /* --- Spreadsheet から補足情報を取得 --- */
-    /**/
-    const rules = await readFromSheet();
-    // speadSheeetの内容から簡易検索
-    const related  = await searchRules(rules, userMessage);
-    //console.log("------ related ------\n", related);
-    answer = await geminiApi(related, userMessage);
-    /* --- Chat API で後送 --- */
-    await sendToChat(spaceName, { text: answer });
-    saveChat(receivedAt, messagePayload, answer, null, "done");
-    await sendToChat(spaceName, setConfirm(docRef));
-    //res.status(204).send(); // Pub/Sub ACK
-
+    if (userMessage === "はい" || userMessage === "いいえ"){
+      await saveAnswer(docRef, userMessage);
+      await sendToChat(spaceName, { text: "回答ありがとうございました。" });
+    } else {
+      await sendToChat(spaceName, { text: "確認中です。少々お待ちください。" });
+      docRef = null;
+      /* --- Spreadsheet から補足情報を取得 --- */
+      /**/
+      const rules = await readFromSheet();
+      // speadSheeetの内容から簡易検索
+      const related  = await searchRules(rules, userMessage);
+      //console.log("------ related ------\n", related);
+      answer = await geminiApi(related, userMessage);
+      /* --- Chat API で後送 --- */
+      await sendToChat(spaceName, { text: answer });
+      docRef = await saveChat(receivedAt, messagePayload, answer, null, "done");
+      await sendToChat(spaceName, setConfirm(docRef));
+      //res.status(204).send(); // Pub/Sub ACK
+    }
   } catch (err) {
     console.error("------ エラー発生 ------\n", err);
     await saveChat(receivedAt, messagePayload, answer, err, "error");
@@ -68,7 +75,8 @@ app.post("/", async(req, res) => {
 /* ========= 管理者用 ========= */
 app.post("/reload", async(req, res) => {
   try {
-    cachedRules = null;
+    console.log("###### app.post reload start ######");
+    setCachedRules(null);
     await readFromSheet();
     res.send("reloaded");
   } catch (err) {
