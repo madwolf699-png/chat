@@ -18,6 +18,17 @@ app.post("/",  async (req, res) => {
   try {
     // Google Chat からのメッセージ
     const event = req.body;
+    console.log("------ event ------\n", event);
+
+    if (event.type === 'CARD_CLICKED' || event.commonEventObject?.invokedFunction){
+      const action = event.commonEventObject?.parameters?.action;
+      return res.json({
+        "actionResponse": {
+          "type": "UPDATE_MESSAGE",
+          "text": `回答ありがとうございました。`,
+        }
+      });
+    }
 
     // 非同期処理用に Pub/Sub へ送信
     /**/
@@ -25,7 +36,6 @@ app.post("/",  async (req, res) => {
       json: event,
     });
     /**/
-
     /**/
     res
     .status(200)

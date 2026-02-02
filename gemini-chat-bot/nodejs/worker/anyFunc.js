@@ -351,6 +351,8 @@ export async function saveAnswer(docRef, answer) {
 export function setCardPayload(spaceName, threadName, docRef) {
   console.log("###### setConfirm start ######");
   console.log("docRef.id =", docRef.id);
+  console.log("spaceName =", spaceName);
+  console.log("threadName =", threadName);
   const docId = String(docRef.id);
   /**/
   /**/
@@ -363,7 +365,7 @@ export function setCardPayload(spaceName, threadName, docRef) {
         thread: { name: threadName }, 
         cardsV2: [
           {
-            cardId: "confirmation_card",
+            cardId: "confirm_" + Date.now(),
             card: {
               header: {
                 title: "回答リクエスト",
