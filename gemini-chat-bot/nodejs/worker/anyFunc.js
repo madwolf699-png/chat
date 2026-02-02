@@ -64,7 +64,10 @@ const model = genAI.getGenerativeModel({
 
 /* ========= Google Chat ========= */
 const chatAuth = new google.auth.GoogleAuth({
-  scopes: ["https://www.googleapis.com/auth/chat.bot"]
+  scopes: [
+    "https://www.googleapis.com/auth/chat.bot",
+    "https://www.googleapis.com/auth/chat.messages.create",
+  ]
 });
 
 /* ========= Google Sheets ========= */
@@ -345,64 +348,73 @@ export async function saveAnswer(docRef, answer) {
   );
 }
 
-export function setConfirm(docRef) {
+export function setCardPayload(spaceName, threadName, docRef) {
   console.log("###### setConfirm start ######");
   console.log("docRef.id =", docRef.id);
   const docId = String(docRef.id);
-  /*
+  /**/
+  /**/
+  /**/
   return (
     {
-      cardsV2: [
-        {
-          cardId: "test",
-          card: {
-            sections: [
-              {
-                widgets: [
-                  {
-                    textParagraph: {
-                      text: "この問題は解決しましたか？"
-                    }
-                  },
-                  {
-                    buttonList: {
-                      buttons: [
-                        {
-                          text: "はい",
-                          onClick: {
-                            action: {
-                              actionMethodName: "answer",
-                              parameters: [
-                                { key: "docId", value: docId },
-                                { key: "answer", value: "yes" }
-                              ]
+      parent: spaceName, // "spaces/XXXXX" の形式
+      requestBody: {
+        // スレッドを維持する場合に指定
+        thread: { name: threadName }, 
+        cardsV2: [
+          {
+            cardId: "confirmation_card",
+            card: {
+              header: {
+                title: "回答リクエスト",
+                subtitle: "この問題は解決しましたか？",
+              },
+              sections: [
+                {
+                  widgets: [
+                    {
+                      buttonList: {
+                        buttons: [
+                          {
+                            text: "はい",
+                            onClick: {
+                              action: {
+                                function: "handle_yes",
+                                parameters: [
+                                  { key: "action", value: "yes" },
+                                  { key: "docId", value: docRef.id}
+                                ]
+                              }
+                            },
+                            // ボタンを強調する場合（マテリアルデザインの色指定）
+                            color: { red: 0.18, green: 0.49, blue: 0.19, alpha: 1 }
+                          },
+                          {
+                            text: "いいえ",
+                            onClick: {
+                              action: {
+                                function: "handle_no",
+                                parameters: [
+                                  { key: "action", value: "no" },
+                                  { key: "docId", value: docRef.id}
+                                ]
+                              }
                             }
                           }
-                        },
-                        {
-                          text: "いいえ",
-                          onClick: {
-                            action: {
-                              actionMethodName: "answer",
-                              parameters: [
-                                { key: "docId", value: docId },
-                                { key: "answer", value: "no" }
-                              ]
-                            }
-                          }
-                        }
-                      ]
+                        ]
+                      }
                     }
-                  }
-                ]
-              }
-            ]
+                  ]
+                }
+              ]
+            }
           }
-        }
-      ]
+        ]
+      }
     }
   );
-  */
+  /**/
+  /*
   return (
     {
       cardsV2: [
@@ -425,152 +437,25 @@ export function setConfirm(docRef) {
       ]
     }
   );
-  /*
-  return (
-    {
-      cardsV2: [
-        {
-          cardId: "test",
-          card: {
-            sections: [
-              {
-                widgets: [
-                  {
-                    textParagraph: {
-                      text: "この問題は解決しましたか？"
-                    }
-                  },
-                  {
-                    selectionInput: {
-                      name: `resolved_${docId}`,
-                      type: "RADIO_BUTTON",
-                      items: [
-                        { text: "はい", value: "yes" },
-                        { text: "いいえ", value: "no" }
-                      ]
-                    } 
-                  }
-                ]
-              },
-              {
-                widgets: [
-                  {
-                    buttonList: {
-                      buttons: [
-                        {
-                          text: "送信",
-                          onClick: {
-                            action: {
-                              "actionMethodName": "submitResolved"
-                            }
-                          }
-                        }
-                      ]
-                    }
-                  }
-                ]
-              }
-            ]
-          }
-        }
-      ]
-    }
-  );
- */
- /*
-  return (
-    {
-      cardsV2: [
-        {
-          cardId: "resolve_check",
-          card: {
-            sections: [
-              {
-                widgets: [
-                  {
-                    buttons: [
-                      {
-                        textButton: {
-                          text: "はい",
-                          onClick: {
-                            action: {
-                              actionMethodName: "RESOLVED_YES"
-                            }
-                          }
-                        }
-                      },
-                      {
-                        textButton: {
-                          text: "いいえ",
-                          onClick: {
-                            action: {
-                              actionMethodName: "RESOLVED_NO"
-                            }
-                          }
-                        }
-                      }
-                    ]
-                  }
-                ]
-              }
-            ]
-          }
-        }
-      ]
-    }
-  );
-*/
-  /*
-  return (
-    {
-      "cardsV2": [
-        {
-          "cardId": "resolve_check",
-          "card": {
-            "header": {
-              "title": "確認",
-              "subtitle": "この問題は解決しましたか？"
-            },
-            "sections": [
-              {
-                "widgets": [
-                  {
-                    "buttonList": {
-                      "buttons": [
-                        {
-                          "text": "はい",
-                          "onClick": {
-                            "action": {
-                              "actionMethodName": "RESOLVED_YES",
-                              "parameters": [
-                                { "key": "resolved", "value": "yes" },
-                                { "key": "documentId", "value": String(docRef.id) }
-                              ]
-                            }
-                          }
-                        },
-                        {
-                          "text": "いいえ",
-                          "onClick": {
-                            "action": {
-                              "actionMethodName": "RESOLVED_NO",
-                              "parameters": [
-                                { "key": "resolved", "value": "no" },
-                                { "key": "documentId", "value": String(docRef.id) }
-                              ]
-                            }
-                          }
-                        }
-                      ]
-                    }
-                  }
-                ]
-              }
-            ]
-          }
-        }
-      ]
-    }
-  );
   */
+}
+
+export async function sendChatCard(payload) {
+  console.log("###### sendChatCard start ######");
+  // 1. 認証設定 (ADC: Application Default Credentials を使用)
+  // Cloud Run上であれば自動でサービスアカウントが使用されます
+  const authClient = await chatAuth.getClient();
+  const credentials = await chatAuth.getCredentials();
+  // サービスアカウントのメールアドレス（client_email）を表示
+  console.log("------ 使用中のサービスアカウント:", credentials.client_email);
+
+  const chat = google.chat({ version: 'v1', auth: authClient });
+  // 2. cardsV2 レスポンスの構築
+  // 3. メッセージの送信
+  try {
+    const response = await chat.spaces.messages.create(payload);
+    console.log('Message sent:', response.data.name);
+  } catch (error) {
+    console.error('Error sending message to Google Chat:', error);
+  }
 }

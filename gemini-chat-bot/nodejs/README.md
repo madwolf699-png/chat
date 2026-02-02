@@ -89,8 +89,11 @@ sudo apt install npm
   ```bash
   gcloud run services add-iam-policy-binding chat-bot \
     --region asia-northeast1 \
-    --member="serviceAccount:service-123456789012@gcp-sa-chat.iam.gserviceaccount.com" \
+    --member="allUsers" \
     --role="roles/run.invoker"
+
+    以下だと回答のろクエストができない
+    --member="serviceAccount:service-123456789012@gcp-sa-chat.iam.gserviceaccount.com"
   ```
 - サービス一覧を確認
   ```bash
@@ -289,6 +292,18 @@ sudo apt install npm
   ```bash
   npm install @google-cloud/pubsub
   gcloud pubsub topics create chat-worker-topic
+  ```
+
+##
+  ```bash
+  gcloud projects add-iam-policy-binding gemini-chat-bot-484323 \
+    --member="serviceAccount:chat-bot-sa@gemini-chat-bot-484323.iam.gserviceaccount.com" \
+    --role="roles/viewer"
+
+  gcloud projects get-iam-policy gemini-chat-bot-484323 \
+    --flatten="bindings[].members" \
+    --format="table(bindings.role)" \
+    --filter="bindings.members:chat-bot-sa@gemini-chat-bot-484323.iam.gserviceaccount.com"
   ```
 
 ## Cloud Runによる開発(Bot（非同期処理用 Cloud Run）)

@@ -8,7 +8,8 @@ import {
   saveChat,
   geminiApi,
   sendToChat,
-  setConfirm,
+  setCardPayload,
+  sendChatCard,
   saveAnswer,
 } from "./anyFunc.js";
 
@@ -36,13 +37,15 @@ app.post("/", async(req, res) => {
       "base64"
     ).toString("utf8");
     const event = JSON.parse(message);
+    //console.log("------ event ------\n", event);
     /* ---- ユーザー入力取得（ここが最大の違い） ---- */
     messagePayload = event.chat.messagePayload;
     //console.log("------ messagePayload ------\n", messagePayload);
     const userMessage = messagePayload?.message?.text;
     const spaceName = messagePayload?.space?.name;
+    const threadName = messagePayload?.message?.thread?.name;
     if (!userMessage || !spaceName) {
-      console.error("Message or space missing");
+          console.error("Message or space missing");
       await sendToChat(spaceName, "Message or space missing");
     }
 
@@ -62,7 +65,7 @@ app.post("/", async(req, res) => {
       /* --- Chat API で後送 --- */
       await sendToChat(spaceName, { text: answer });
       docRef = await saveChat(receivedAt, messagePayload, answer, null, "done");
-      await sendToChat(spaceName, setConfirm(docRef));
+      await sendChatCard(setCardPayload(spaceName, threadName, docRef));
       //res.status(204).send(); // Pub/Sub ACK
     }
   } catch (err) {
