@@ -296,14 +296,29 @@ sudo apt install npm
 
 ##
   ```bash
-  gcloud projects add-iam-policy-binding gemini-chat-bot-484323 \
-    --member="serviceAccount:chat-bot-sa@gemini-chat-bot-484323.iam.gserviceaccount.com" \
+  SA=617913681837-compute@developer.gserviceaccount.com
+  gcloud projects add-iam-policy-binding sun-internal-chat \
+    --member="serviceAccount:617913681837-compute@developer.gserviceaccount.com" \
+    --role="roles/cloudbuild.builds.builder"
+
+  gcloud projects add-iam-policy-binding sun-internal-chat \
+    --member="serviceAccount:617913681837-compute@developer.gserviceaccount.com" \
+    --role="roles/storage.admin"
+  
+  gcloud projects add-iam-policy-binding sun-internal-chat \
+  --member="serviceAccount:617913681837-compute@developer.gserviceaccount.com" \
+  --role="roles/run.admin"
+  ```
+
+  ```bash
+  gcloud projects add-iam-policy-binding sun-internal-chat \
+    --member="serviceAccount:617913681837-compute@developer.gserviceaccount.com" \
     --role="roles/viewer"
 
-  gcloud projects get-iam-policy gemini-chat-bot-484323 \
+  gcloud projects get-iam-policy sun-internal-chat \
     --flatten="bindings[].members" \
     --format="table(bindings.role)" \
-    --filter="bindings.members:chat-bot-sa@gemini-chat-bot-484323.iam.gserviceaccount.com"
+    --filter="bindings.members:617913681837-compute@developer.gserviceaccount.com"
   ```
 
 ## Cloud Runによる開発(Bot（非同期処理用 Cloud Run）)
@@ -313,7 +328,7 @@ sudo apt install npm
     --source . \
     --region asia-northeast1 \
     --platform managed \
-    --service-account chat-bot-sa@gemini-chat-bot-484323.iam.gserviceaccount.com \
+    --service-account 617913681837-compute@developer.gserviceaccount.com \
     --allow-unauthenticated
   
    gcloud run services add-iam-policy-binding chat-bot \
@@ -328,18 +343,16 @@ sudo apt install npm
   gcloud run deploy chat-worker \
     --source . \
     --region asia-northeast1 \
-    --service-account chat-bot-sa@gemini-chat-bot-484323.iam.gserviceaccount.com \
+    --service-account 617913681837-compute@developer.gserviceaccount.com \
     --no-allow-unauthenticated \
     --set-env-vars \
-    GEMINI_API_KEY=AIzaSyxxxxxxxxxxxx,SPREADSHEET_ID=1AbCdEfGhIjKlMnOp,FIRESTORE_DOC=
+    GEMINI_API_KEY=,SPREADSHEET_ID=,FIRESTORE_DOC=,PROJECT_ID=
   ```
   ```bash
   gcloud run services add-iam-policy-binding chat-worker \
     --region asia-northeast1 \
-    --member="serviceAccount:chat-bot-sa@gemini-chat-bot-484323.iam.gserviceaccount.com" \
+    --member="serviceAccount:617913681837-compute@developer.gserviceaccount.com" \
     --role="roles/run.invoker"
-  
-  gcloud pubsub subscriptions describe chat-worker-sub
   ```
 
 ## Cloud Runによる開発(External（非同期処理用 Cloud Run）)
@@ -348,28 +361,28 @@ sudo apt install npm
   gcloud run deploy chat-external \
     --source . \
     --region asia-northeast1 \
-    --service-account chat-bot-sa@gemini-chat-bot-484323.iam.gserviceaccount.com \
+    --service-account 617913681837-compute@developer.gserviceaccount.com \
     --allow-unauthenticated \
     --set-env-vars \
-    TARGET_URL=https://chat-worker-750317593501.asia-northeast1.run.app/reload
+    TARGET_URL=https://chat-worker-617913681837.asia-northeast1.run.app/reload
   ```
   ```bash
   gcloud run services add-iam-policy-binding chat-external \
     --region asia-northeast1 \
-    --member="serviceAccount:chat-bot-sa@gemini-chat-bot-484323.iam.gserviceaccount.com" \
+    --member="serviceAccount:617913681837-compute@developer.gserviceaccount.com" \
     --role="roles/run.invoker"
   ```
 
 ## Cloud Runによる開発(IAM 設定（重要）)
   ```bash
-  以下はとりあえず不要
-  gcloud projects add-iam-policy-binding PROJECT_ID \
-    --member="serviceAccount:chat-bot-sa@PROJECT_ID.iam.gserviceaccount.com" \
+  以下は場合によって必要★
+  gcloud projects add-iam-policy-binding sun-internal-chat \
+    --member="serviceAccount:617913681837-compute@developer.gserviceaccount.com" \
     --role="roles/chat.bot"
 
   以下は場合によって必要★
-  gcloud projects add-iam-policy-binding PROJECT_ID \
-    --member="serviceAccount:chat-bot-sa@PROJECT_ID.iam.gserviceaccount.com" \
+  gcloud projects add-iam-policy-binding sun-internal-chat \
+    --member="serviceAccount:617913681837-compute@developer.gserviceaccount.com" \
     --role="roles/pubsub.publisher"
   ```
 
@@ -377,8 +390,10 @@ sudo apt install npm
   ```bash
   gcloud pubsub subscriptions create chat-worker-sub \
     --topic chat-worker-topic \
-    --push-endpoint=https://chat-worker-xxxxx.run.app \
-    --push-auth-service-account=chat-bot-sa@PROJECT_ID.iam.gserviceaccount.com
+    --push-endpoint=https://chat-worker-617913681837.asia-northeast1.run.app \
+    --push-auth-service-account=617913681837-compute@developer.gserviceaccount.com
+  
+  gcloud pubsub subscriptions describe chat-worker-sub
   ```
 
 ## Cloud Runのログ確認
@@ -405,7 +420,7 @@ sudo apt install npm
 ## spreadSheetの環境設定
 - Cloud RunでspreadSheetを扱うには、該当のspreadSHeetに対して以下のサービスアカウントを共有の権限として設定する必要がある。
   ```bash
-  chat-bot-sa@[PROJECT-ID].iam.gserviceaccount.com
+  617913681837-compute@developer.gserviceaccount.com
   ```
 
 - ローカルspreadSheetを扱うには、以下のように一時的に認証情報を環境変数とする。
@@ -420,13 +435,13 @@ sudo apt install npm
   npm install @google-cloud/firestore
   ```
   ```bash
-  gcloud projects add-iam-policy-binding [PROJECT] \
-    --member="serviceAccount:chat-bot-sa@gemini-chat-bot-484323.iam.gserviceaccount.com" \
+  gcloud projects add-iam-policy-binding sun-internal-chat \
+    --member="serviceAccount:617913681837-compute@developer.gserviceaccount.com" \
     --role="roles/datastore.user"
 
-  gcloud projects get-iam-policy gemini-chat-bot-484323 \
+  gcloud projects get-iam-policy sun-internal-chat \
     --flatten="bindings[].members" \
-    --filter="bindings.members:chat-bot-sa@gemini-chat-bot-484323.iam.gserviceaccount.com" \
+    --filter="bindings.members:617913681837-compute@developer.gserviceaccount.com" \
     --format="table(bindings.role)"
 
   再デプロイ
@@ -471,7 +486,7 @@ sudo apt install npm
   ```bash
   TOKEN=$(gcloud auth print-identity-token)
   curl -X POST -H "Authorization: Bearer $TOKEN" \
-  https://chat-worker-750317593501.asia-northeast1.run.app/reload
+  https://chat-worker-617913681837.asia-northeast1.run.app/reload
   ```
 
 ## 日本語の形態素解析

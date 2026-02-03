@@ -38,22 +38,58 @@ app.post("/", async(req, res) => {
     ).toString("utf8");
     const event = JSON.parse(message);
     //console.log("------ event ------\n", event);
-    /* ---- ユーザー入力取得（ここが最大の違い） ---- */
-    messagePayload = event.chat.messagePayload;
-    //console.log("------ messagePayload ------\n", messagePayload);
-    const userMessage = messagePayload?.message?.text;
-    const spaceName = messagePayload?.space?.name;
-    const threadName = messagePayload?.message?.thread?.name;
-    if (!userMessage || !spaceName) {
-          console.error("Message or space missing");
-      await sendToChat(spaceName, "Message or space missing");
-    }
+    if (event.type === "CARD_CLICKED") {
+      const action = event.action;
+      //console.log("------ action ------\n", action);
+      // パラメータを扱いやすいオブジェクトに変換
+      const params = {};
+      if (action.parameters) {
+        action.parameters.forEach(p => {
+          params[p.key] = p.value;
+        });
+      }
+      // 判別処理
+      if (action.actionMethodName === 'handle_yes') {
+        await saveAnswer(params.docId, "yes");
+      } else if (action.actionMethodName === 'handle_no') {
+        await saveAnswer(params.docId, "no");
+      }
+      /*
+      res.json({
+        "actionResponse": {
+          "type": "UPDATE_MESSAGE"
+        },
+        "text": "回答ありがとうございました。"
+      });
+      */
+      /*
+      res.json({
+        "renderActions": {
+          "actionStatus": {
+            "userFacingMessage": "回答ありがとうございました。"
+          }
+        }
+      });
+      */
+    } else if (event.type === "MESSAGE") {
+      /* ---- ユーザー入力取得（ここが最大の違い） ---- */
+      messagePayload = event.message;
+      const userMessage = messagePayload?.text;
+      const spaceName = messagePayload?.space?.name;
+      const threadName = messagePayload?.thread?.name;
+      /*
+      messagePayload = event.chat.messagePayload;
+      //console.log("------ messagePayload ------\n", messagePayload);
+      const userMessage = messagePayload?.message?.text;
+      const spaceName = messagePayload?.space?.name;
+      const threadName = messagePayload?.message?.thread?.name;
+      */
+      if (!userMessage || !spaceName) {
+            console.error("Message or space missing");
+        await sendToChat(spaceName, "Message or space missing");
+      }
 
-    if (userMessage === "はい" || userMessage === "いいえ"){
-      await saveAnswer(docRef, userMessage);
-      await sendToChat(spaceName, { text: "回答ありがとうございました。" });
-    } else {
-      await sendToChat(spaceName, { text: "確認中です。少々お待ちください。" });
+      //await sendToChat(spaceName, { text: "確認中です。少々お待ちください。" });
       docRef = null;
       /* --- Spreadsheet から補足情報を取得 --- */
       /**/
@@ -70,9 +106,8 @@ app.post("/", async(req, res) => {
     }
   } catch (err) {
     console.error("------ エラー発生 ------\n", err);
+    console.error("ERROR:", err);
     await saveChat(receivedAt, messagePayload, answer, err, "error");
-    //console.error("ERROR:", err);
-    //await sendToChat(spaceName, "エラーが発生しました。管理本部へお問い合わせください。");
   }
 });
 /* ========= 管理者用 ========= */

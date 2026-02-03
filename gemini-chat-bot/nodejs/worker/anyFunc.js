@@ -88,7 +88,7 @@ console.log("FIRESTORE_DOC=", process.env.FIRESTORE_DOC);
 console.log("PROJECT_ID=", process.env.PROJECT_ID);
 //console.log("SERVICE=", process.env.K_SERVICE);
 //console.log("REVISION=", process.env.K_REVISION);
-
+/**/
 const db = new Firestore({
   maxRetries: 0,
   timeout: 3000,
@@ -96,6 +96,7 @@ const db = new Firestore({
   databaseId: "(default)",
   preferRest: true,
 });
+/**/
 /*
 await db.collection("_healthcheck").add({
   ok: true,
@@ -317,10 +318,10 @@ export async function saveChat(receivedAt, msg, answer, err, status) {
   //docRef = null;
   const doc = {
     request: {
-      spaceName: msg?.space?.name,
+      spaceName: msg?.space?.name ? msg?.space?.name : "",
       //displayName: msg?.sender?.displayName,
       //email: msg?.sender?.email,
-      userMessage: msg?.message?.text,
+      userMessage: msg?.text ? msg?.text : "",
     },
     response: answer ? answer : {},
     error: err ? {
@@ -329,7 +330,7 @@ export async function saveChat(receivedAt, msg, answer, err, status) {
         stack: err?.stack?.slice(0, 2000) ?? null
       } : {},
     status: status,
-    isHit: answer.includes("該当なし") ? false : true,
+    isHit: answer ? (answer.includes("該当なし") ? false : true) : false,
     answer: "",
     receivedAt: receivedAt,
     sendedAt: answer ? new Date() : "",
@@ -338,7 +339,16 @@ export async function saveChat(receivedAt, msg, answer, err, status) {
   return await db.collection(process.env.FIRESTORE_DOC).add(doc);
 }
 
-export async function saveAnswer(docRef, answer) {
+export async function saveAnswer(docId, answer) {
+  const docRef = db.collection(process.env.FIRESTORE_DOC).doc(docId);
+  await docRef.set(
+    {
+      answer: answer,
+      updatedAt: new Date()
+    },
+    { merge: true } // 既存のフィールドを保持したまま更新
+  );
+  /*
   await docRef.set(
     {
       answer: answer,
@@ -346,13 +356,14 @@ export async function saveAnswer(docRef, answer) {
     },
     { merge: true }
   );
+  */
 }
 
 export function setCardPayload(spaceName, threadName, docRef) {
   console.log("###### setConfirm start ######");
   console.log("docRef.id =", docRef.id);
-  console.log("spaceName =", spaceName);
-  console.log("threadName =", threadName);
+  //console.log("spaceName =", spaceName);
+  //console.log("threadName =", threadName);
   const docId = String(docRef.id);
   /**/
   /**/
@@ -383,7 +394,6 @@ export function setCardPayload(spaceName, threadName, docRef) {
                               action: {
                                 function: "handle_yes",
                                 parameters: [
-                                  { key: "action", value: "yes" },
                                   { key: "docId", value: docRef.id}
                                 ]
                               }
@@ -397,7 +407,6 @@ export function setCardPayload(spaceName, threadName, docRef) {
                               action: {
                                 function: "handle_no",
                                 parameters: [
-                                  { key: "action", value: "no" },
                                   { key: "docId", value: docRef.id}
                                 ]
                               }
@@ -449,7 +458,7 @@ export async function sendChatCard(payload) {
   const authClient = await chatAuth.getClient();
   const credentials = await chatAuth.getCredentials();
   // サービスアカウントのメールアドレス（client_email）を表示
-  console.log("------ 使用中のサービスアカウント:", credentials.client_email);
+  //console.log("------ 使用中のサービスアカウント:", credentials.client_email);
 
   const chat = google.chat({ version: 'v1', auth: authClient });
   // 2. cardsV2 レスポンスの構築
