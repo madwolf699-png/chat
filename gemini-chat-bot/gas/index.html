@@ -53,14 +53,17 @@
 
       function drawKeyword(res) {
         draw(res, 'keyword_chart_div');
+        draw2(res, 'keyword_chart2_div');
       }
 
       function drawAnswer(res) {
         draw(res, 'answer_chart_div');
+        draw2(res, 'answer_chart2_div');
       }
 
       function drawStatus(res) {
         draw(res, 'status_chart_div');
+        draw2(res, 'status_chart2_div');
       }
 
       function draw(res, divId) {
@@ -79,6 +82,25 @@
         chart.draw(chartData, options);
       }
 
+      function draw2(res, divId) {
+        showLoading(false);
+        var chartData = google.visualization.arrayToDataTable(res.data2);
+        var options = {
+          title: '全体に対する回答の割合',
+          width: 600,
+          height: 200,
+          legend: { position: 'top', maxLines: 3 },
+          isStacked: 'percent', // これがパーセンテージ表示の肝です
+          hAxis: {
+            minValue: 0,
+            ticks: [0, .25, .5, .75, 1] // 0%〜100%の目盛り
+          },
+          series: res.series
+        };
+        var chart = new google.visualization.BarChart(document.getElementById(divId));
+        chart.draw(chartData, options);
+      }
+
       function showLoading(isLoading) {
         document.getElementById('loading').style.visibility = isLoading ? 'visible' : 'hidden';
       }
@@ -88,7 +110,7 @@
     </script>
   </head>
   <body>
-    <h1>Gemini Chat Bot 統計ダッシュボード</h1>
+    <h1>SUN専用チャット 統計ダッシュボード</h1>
     <div id="loading">集計中...</div>
 
     <div id="menu_screen" class="screen active">
@@ -132,7 +154,8 @@
           <option value="産休・育休">産休・育休</option>
         </select>
       </div>
-      <div id="keyword_chart_div" style="width: 100%; height: 500px"></div>
+      <div id="keyword_chart_div" style="width: 100%; height: 480px"></div>
+      <div id="keyword_chart2_div" style="width: 100%; height: 120px"></div>
     </div>
 
     <div id="answer_screen" class="screen">
@@ -140,7 +163,8 @@
         <button class="back" onclick="showScreen('menu_screen')">← 戻る</button>
         <span style="font-weight: bold; margin-left: 10px;">問題解決の回答傾向の推移</span>
       </div>
-      <div id="answer_chart_div" style="width: 100%; height: 500px"></div>
+      <div id="answer_chart_div" style="width: 100%; height: 480px"></div>
+      <div id="answer_chart2_div" style="width: 100%; height: 120px"></div>
     </div>
 
     <div id="status_screen" class="screen">
@@ -148,7 +172,8 @@
         <button class="back" onclick="showScreen('menu_screen')">← 戻る</button>
         <span style="font-weight: bold; margin-left: 10px;">異常終了の推移</span>
       </div>
-      <div id="status_chart_div" style="width: 100%; height: 500px"></div>
+      <div id="status_chart_div" style="width: 100%; height: 480px"></div>
+      <div id="status_chart2_div" style="width: 100%; height: 120px"></div>
     </div>
 
   </body>
