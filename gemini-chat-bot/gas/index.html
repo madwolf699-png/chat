@@ -13,6 +13,73 @@
       button.tertiary { background-color: #ff3300; }
       button.back { background-color: #666; }
       #loading { color: #666; height: 20px; visibility: hidden; }
+      .table-container {
+          width: 100%;
+          max-width: 900px;
+          background: white;
+          border-radius: 12px;
+          box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05);
+          overflow: hidden; /* 角丸を適用するため */
+      }
+      table {
+          width: 100%;
+          border-collapse: collapse;
+          text-align: left;
+      }
+      thead {
+          background-color: #4a90e2;
+          color: white;
+      }
+      th {
+          padding: 18px 20px;
+          font-weight: 600;
+          letter-spacing: 0.5px;
+          text-transform: uppercase;
+          font-size: 0.85rem;
+      }
+      td {
+          padding: 16px 20px;
+          border-bottom: 1px solid #edf2f7;
+          font-size: 0.95rem;
+          line-height: 1.5;
+      }
+      tr:last-child td {
+          border-bottom: none;
+      }
+      /* ホバー時の演出 */
+      tbody tr {
+          transition: background-color 0.2s ease;
+      }
+      tbody tr:hover {
+          background-color: #f0f7ff;
+      }
+      /* 日時列のスタイル */
+      .col-date {
+          white-space: nowrap;
+          color: #718096;
+          font-size: 0.85rem;
+      }
+      /* メッセージ列 */
+      .col-message {
+          font-weight: 500;
+      }
+      /* エラーラベルのスタイル */
+      .error-tag {
+          display: inline-block;
+          padding: 4px 12px;
+          border-radius: 20px;
+          font-size: 0.75rem;
+          font-weight: bold;
+      }
+      .status-none {
+          background-color: #e2e8f0;
+          color: #4a5568;
+      }
+      .status-error {
+          background-color: #fff5f5;
+          color: #e53e3e;
+          border: 1px solid #feb2b2;
+      }
     </style>
     <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
     <script type="text/javascript">
@@ -52,25 +119,40 @@
       }
 
       function drawKeyword(res) {
-        draw(res, 'keyword_chart_div');
-        draw2(res, 'keyword_chart2_div');
+        draw_fromto(res.fromto, 'keyword_fromto_div');
+        draw_chart(res.title, res.chartData, 'keyword_chart_div');
+        draw_chart2(res.chartData2, res.series, 'keyword_chart2_div');
+        draw_list(res.listData, 'keyword_list_div');
       }
 
       function drawAnswer(res) {
-        draw(res, 'answer_chart_div');
-        draw2(res, 'answer_chart2_div');
+        draw_fromto(res.fromto, 'answer_fromto_div');
+        draw_chart(res.title, res.chartData, 'answer_chart_div');
+        draw_chart2(res.chartData2, res.series, 'answer_chart2_div');
+        draw_list(res.listData_no, 'answer_list_no_div');
+        draw_list(res.listData_other, 'answer_list_other_div');
+        draw_chart2(res.chartData3, res.series, 'answer_chart3_div');
       }
 
       function drawStatus(res) {
-        draw(res, 'status_chart_div');
-        draw2(res, 'status_chart2_div');
+        draw_fromto(res.fromto, 'status_fromto_div');
+        draw_chart(res.title, res.chartData, 'status_chart_div');
+        draw_chart2(res.chartData2, res.series, 'status_chart2_div');
+        draw_list(res.listData_error, 'status_list_error_div');
+        draw_list(res.listData_received, 'status_list_received_div');
+        draw_chart2(res.chartData3, res.series, 'status_chart3_div');
       }
 
-      function draw(res, divId) {
+      function draw_fromto(res, divId) {
+        var fromto = document.getElementById(divId);
+        fromto.innerHTML = res.oneMonthAgo_formatted + "　～　" + res.now_formatted;
+      }
+
+      function draw_chart(title, data, divId) {
         showLoading(false);
-        var chartData = google.visualization.arrayToDataTable(res.data);
+        var chartData = google.visualization.arrayToDataTable(data);
         var options = {
-          title: res.title,
+          title: title,
           curveType: 'function',
           legend: { position: 'bottom' },
           hAxis: { title: '日付', slantedText: true },
@@ -82,9 +164,10 @@
         chart.draw(chartData, options);
       }
 
-      function draw2(res, divId) {
+      function draw_chart2(data, series, divId) {
         showLoading(false);
-        var chartData = google.visualization.arrayToDataTable(res.data2);
+        console.log(data);
+        var chartData = google.visualization.arrayToDataTable(data);
         var options = {
           title: '全体に対する回答の割合',
           width: 600,
@@ -93,12 +176,39 @@
           isStacked: 'percent', // これがパーセンテージ表示の肝です
           hAxis: {
             minValue: 0,
-            ticks: [0, .25, .5, .75, 1] // 0%〜100%の目盛り
+            ticks: [0, .10, .20, .30, .40, .50, .60, .70, .80, .90, 1] // 0%〜100%の目盛り
           },
-          series: res.series
+          series: series
         };
         var chart = new google.visualization.BarChart(document.getElementById(divId));
         chart.draw(chartData, options);
+      }
+
+      function draw_list(data, divId) {
+        showLoading(false);
+        var listData = '<div class="table-container">';
+        listData += '    <table>';
+        listData += '        <thead>';
+        listData += '            <tr>';
+        listData += '                <th style="width: 25%;">受信日時</th>';
+        listData += '                <th style="width: 50%;">Message</th>';
+        listData += '                <th style="width: 25%;">Content</th>';
+        listData += '            </tr>';
+        listData += '        </thead>';
+        listData += '        <tbody>';
+        data.forEach(fields => {
+          console.log(fields);
+          listData += '            <tr>';
+          listData += '                <td class="col-date">' + fields.receivedAt + '</td>';
+          listData += '<td class="col-message">' + fields.userMessage + '</td>';
+          listData += '<td><span class="error-tag status-none">' + fields.content + '</span></td>';
+          listData += '            </tr>';
+        });
+        listData += '        </tbody>';
+        listData += '    </table>';
+
+        var list = document.getElementById(divId);
+        list.innerHTML = listData;
       }
 
       function showLoading(isLoading) {
@@ -107,6 +217,47 @@
 
       // 初回起動時
       google.charts.setOnLoadCallback(() => showScreen('menu_screen'));
+
+      // ダウンロード
+      function handleDownload() {
+        const btn = document.getElementById('downloadBtn');
+        const msg = document.getElementById('msg');
+        
+        btn.disabled = true;
+        msg.innerText = "データを取得中...";
+
+        // GASの getFirestoreDataForDownload を実行
+        google.script.run
+          .withSuccessHandler(function(data) {
+            if (data.startsWith("Error:")) {
+              alert(data);
+              return;
+            }
+            
+            // ダウンロード処理の実行
+            const fileName = "firestore_export_" + new Date().getTime() + ".json";
+            const blob = new Blob([data], { type: 'application/json' });
+            const url = window.URL.createObjectURL(blob);
+            
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = url;
+            a.download = fileName;
+            document.body.appendChild(a);
+            a.click();
+            
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+            
+            btn.disabled = false;
+            msg.innerText = "完了しました。";
+          })
+          .withFailureHandler(function(err) {
+            alert("通信エラーが発生しました: " + err);
+            btn.disabled = false;
+          })
+          .getFirestoreDataForDownload();
+      }      
     </script>
   </head>
   <body>
@@ -119,6 +270,8 @@
         <button onclick="showScreen('keyword_screen')">キーワード別の推移</button>
         <button class="secondary" onclick="showScreen('answer_screen')">問題解決の回答傾向の推移</button>
         <button class="tertiary" onclick="showScreen('status_screen')">異常終了の推移</button>
+        <button class="btn" style="background-color: gray;" id="downloadBtn" onclick="handleDownload()">データをダウンロードする</button>
+        <p id="msg"></p>
       </div>
     </div>
 
@@ -154,8 +307,15 @@
           <option value="産休・育休">産休・育休</option>
         </select>
       </div>
-      <div id="keyword_chart_div" style="width: 100%; height: 480px"></div>
-      <div id="keyword_chart2_div" style="width: 100%; height: 120px"></div>
+      <center>
+      <div class="nav-bar">
+        <div id="keyword_fromto_div" style="width: 100%;"></div>
+      </div>
+      <div id="keyword_chart_div" style="width: 100%; height: 480px; margin-bottom: 40px;"></div>
+      <div id="keyword_chart2_div" style="width: 100%; height:: 160px; margin-bottom: 40px;"></div>
+      <hr>
+      <div id="keyword_list_div" style="width: 100%;"></div>
+      </center>
     </div>
 
     <div id="answer_screen" class="screen">
@@ -163,8 +323,24 @@
         <button class="back" onclick="showScreen('menu_screen')">← 戻る</button>
         <span style="font-weight: bold; margin-left: 10px;">問題解決の回答傾向の推移</span>
       </div>
-      <div id="answer_chart_div" style="width: 100%; height: 480px"></div>
-      <div id="answer_chart2_div" style="width: 100%; height: 120px"></div>
+      <center>
+      <div class="nav-bar">
+        <div id="answer_fromto_div" style="width: 100%;"></div>
+      </div>
+      <div id="answer_chart_div" style="width: 100%; height: 480px; margin-bottom: 40px;"></div>
+      <div id="answer_chart2_div" style="width: 100%; height: 160px; margin-bottom: 40px;"></div>
+      <hr>
+      <h3>「いいえ」</h3>
+      <div id="answer_list_no_div" style="width: 100%;"></div>
+      <hr>
+      <h3>「未回答」</h3>
+      <div id="answer_list_other_div" style="width: 100%;"></div>
+      <hr>
+      <div class="nav-bar">
+        総評
+      </div>
+      <div id="answer_chart3_div" style="width: 100%; height: 160px; margin-bottom: 40px;"></div>
+      </center>
     </div>
 
     <div id="status_screen" class="screen">
@@ -172,8 +348,24 @@
         <button class="back" onclick="showScreen('menu_screen')">← 戻る</button>
         <span style="font-weight: bold; margin-left: 10px;">異常終了の推移</span>
       </div>
-      <div id="status_chart_div" style="width: 100%; height: 480px"></div>
-      <div id="status_chart2_div" style="width: 100%; height: 120px"></div>
+      <center>
+      <div class="nav-bar">
+        <div id="status_fromto_div" style="width: 100%;"></div>
+      </div>
+      <div id="status_chart_div" style="width: 100%; height: 480px; margin-bottom: 40px;"></div>
+      <div id="status_chart2_div" style="width: 100%; height: 160px; margin-bottom: 40px;"></div>
+      <hr>
+      <h3>error</h3>
+      <div id="status_list_error_div" style="width: 100%;"></div>
+      <hr>
+      <h3>else</h3>
+      <div id="status_list_received_div" style="width: 100%;"></div>
+      <hr>
+      <div class="nav-bar">
+        総評
+      </div>
+      <div id="status_chart3_div" style="width: 100%; height: 160px; margin-bottom: 40px;"></div>
+      </center>
     </div>
 
   </body>
