@@ -538,11 +538,16 @@ function getFirestoreDataForDownload() {
   }
 
   // 各レコードの fields 部分を抽出し、JSON文字列化して改行で連結
-  const data = rawData.map(doc => {
+  const formattedData = rawData.map(doc => {
     // doc.fields が存在するかチェック（万が一のデータ不備対策）
+    return doc.fields ? doc.fields : doc;
+  });
+    /*
     const content = doc.fields ? doc.fields : doc; 
     return JSON.stringify(content);
   }).join("\n");
+  */
 
-  return data;
+  return JSON.stringify(formattedData);
+  //return formattedData;
 }
