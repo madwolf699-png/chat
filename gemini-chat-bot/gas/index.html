@@ -25,6 +25,7 @@
           width: 100%;
           border-collapse: collapse;
           text-align: left;
+          table-layout: fixed; /* これを追加 */
       }
       thead {
           background-color: #4a90e2;
@@ -58,10 +59,19 @@
           white-space: nowrap;
           color: #718096;
           font-size: 0.85rem;
+          width: 150px;
+      }
+      .col-name {
+          font-weight: 500;
+          white-space: nowrap; /* 改行させない */
+          overflow: hidden;    /* はみ出た分を隠す */
+          text-overflow: ellipsis; /* はみ出た分を「...」にする（任意） */
+          width: 120px;
       }
       /* メッセージ列 */
       .col-message {
           font-weight: 500;
+          width: 30%;
       }
       /* エラーラベルのスタイル */
       .error-tag {
@@ -70,6 +80,7 @@
           border-radius: 20px;
           font-size: 0.75rem;
           font-weight: bold;
+          width: auto;
       }
       .status-none {
           background-color: #e2e8f0;
@@ -90,13 +101,29 @@
         document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
         document.getElementById(screenId).classList.add('active');
         
-        if (screenId === 'keyword_screen') {
+        if (screenId === 'summary_screen') {
+          onSummaryChange(); // サマリ画面に移ったら初期表示
+        } else if (screenId === 'keyword_screen') {
           onKeywordChange(); // キーワード画面に移ったら初期表示
         } else if (screenId === 'answer_screen') {
           loadAnswerChart(); // 回答傾向画面に移ったら表示
         } else if (screenId === 'status_screen') {
           loadStatusChart(); // 異常終了画面に移ったら表示
         }
+      }
+
+      // サマリ推移の取得
+      function onSummaryChange() {
+        var selectEl = document.getElementById('keywordSelect');
+        var options = selectEl.options;
+        var keywordList = [];
+        // すべての選択肢（value）を配列に格納
+        for (var i = 0; i < options.length; i++) {
+          // 「該当なし」などを除外したい場合は if でフィルタリングも可能です
+          keywordList.push(options[i].value);
+        }
+        showLoading(true);
+        google.script.run.withSuccessHandler(drawSummary).getSummaryData(keywordList);
       }
 
       // キーワード推移の取得
@@ -118,29 +145,36 @@
         google.script.run.withSuccessHandler(drawStatus).getStatusData();
       }
 
+      function drawSummary(res) {
+        draw_chart_bar_normal('キーワード別の総集計', res.chartData_keyword, 'summary_chart_keyword_div');
+        draw_chart_bar_percent('回答別', res.chartData_answer, res.series_answer, 'summary_chart_answer_div');
+        draw_chart_bar_percent('異常終了', res.chartData_status, res.series_status, 'summary_chart_status_div');
+        draw_chart_bar_normal('質問者別の総集計', res.chartData_user, 'summary_chart_user_div');
+      }
+
       function drawKeyword(res) {
         draw_fromto(res.fromto, 'keyword_fromto_div');
-        draw_chart(res.title, res.chartData, 'keyword_chart_div');
-        draw_chart2(res.chartData2, res.series, 'keyword_chart2_div');
+        draw_chart_line(res.title, res.chartData, 'keyword_chart_div');
+        draw_chart_bar_percent(res.keyword, res.chartData2, res.series, 'keyword_chart2_div');
         draw_list(res.listData, 'keyword_list_div');
       }
 
       function drawAnswer(res) {
         draw_fromto(res.fromto, 'answer_fromto_div');
-        draw_chart(res.title, res.chartData, 'answer_chart_div');
-        draw_chart2(res.chartData2, res.series, 'answer_chart2_div');
+        draw_chart_line(res.title, res.chartData, 'answer_chart_div');
+        draw_chart_bar_percent('回答別', res.chartData2, res.series, 'answer_chart2_div');
         draw_list(res.listData_no, 'answer_list_no_div');
         draw_list(res.listData_other, 'answer_list_other_div');
-        draw_chart2(res.chartData3, res.series, 'answer_chart3_div');
+        //draw_chart_bar_percent(res.chartData3, res.series, 'answer_chart3_div');
       }
 
       function drawStatus(res) {
         draw_fromto(res.fromto, 'status_fromto_div');
-        draw_chart(res.title, res.chartData, 'status_chart_div');
-        draw_chart2(res.chartData2, res.series, 'status_chart2_div');
+        draw_chart_line(res.title, res.chartData, 'status_chart_div');
+        draw_chart_bar_percent('異常終了別', res.chartData2, res.series, 'status_chart2_div');
         draw_list(res.listData_error, 'status_list_error_div');
         draw_list(res.listData_received, 'status_list_received_div');
-        draw_chart2(res.chartData3, res.series, 'status_chart3_div');
+        //draw_chart_bar_percent(res.chartData3, res.series, 'status_chart3_div');
       }
 
       function draw_fromto(res, divId) {
@@ -148,7 +182,50 @@
         fromto.innerHTML = res.oneMonthAgo_formatted + "　～　" + res.now_formatted;
       }
 
-      function draw_chart(title, data, divId) {
+      function draw_chart_bar_normal(title, data, divId) {
+        showLoading(false);
+        console.log(data);
+        var chartData = google.visualization.arrayToDataTable(data);
+        var finalHeight = Math.max((data.length - 1) * 45 + 100, 400);
+        document.getElementById(divId).style.height = finalHeight + 'px';
+        var options = {
+          title: title,
+          chartArea: {
+            left: 200,   // ここを「120」から「200〜250」くらいに増やす（※重要）
+            width: '65%', // leftを増やした分、width（棒の表示幅）を少し減らして調整
+            top: 50,
+            bottom: 50,
+            height: 'auto'
+          },
+          hAxis: {
+            title: 'ヒット数',
+            minValue: 0,
+            textStyle: { fontSize: 11 },
+          },
+          vAxis: {
+            title: 'キーワード',
+            textStyle: { fontSize: 12 } // フォントサイズを微調整
+          },
+          //height: (data.length - 1) * 24, // 項目数に応じて高さを動的に増やす（重要！）
+          height: finalHeight,
+          bar: { groupWidth: '75%' }, // 棒の太さをバランス良く
+          //bar: { groupWidth: '66%' },      // 棒の太さを80%まで広げる
+          /*
+          chartArea: {
+            top: 50,
+            bottom: 50,
+            left: 120,   // ラベルが切れないよう左側に余裕を持たせる
+            width: '70%',
+            height: '80%' // 描画エリア自体の高さも確保
+          },
+          */
+          legend: { position: 'none' } // これで色ボックスと「数値」という文字が消えます
+        };
+        var chart = new google.visualization.BarChart(document.getElementById(divId));
+        chart.draw(chartData, options);
+      }
+
+      function draw_chart_line(title, data, divId) {
         showLoading(false);
         var chartData = google.visualization.arrayToDataTable(data);
         var options = {
@@ -164,13 +241,13 @@
         chart.draw(chartData, options);
       }
 
-      function draw_chart2(data, series, divId) {
+      function draw_chart_bar_percent(title, data, series, divId) {
         showLoading(false);
         console.log(data);
         var chartData = google.visualization.arrayToDataTable(data);
         var options = {
-          title: '全体に対する回答の割合',
-          width: 600,
+          title: '全体に対する' + title + 'の割合',
+          width: "100%",
           height: 200,
           legend: { position: 'top', maxLines: 3 },
           isStacked: 'percent', // これがパーセンテージ表示の肝です
@@ -190,9 +267,16 @@
         listData += '    <table>';
         listData += '        <thead>';
         listData += '            <tr>';
+        listData += '                <th style="width: 110px;">受信日時</th>';
+        listData += '                <th style="width: 110px;">name</th>';
+        listData += '                <th style="width: auto;">Message</th>';
+        listData += '                <th style="">Content</th>';
+        /*
         listData += '                <th style="width: 25%;">受信日時</th>';
+        listData += '                <th style="width: 50%;">name</th>';
         listData += '                <th style="width: 50%;">Message</th>';
         listData += '                <th style="width: 25%;">Content</th>';
+        */
         listData += '            </tr>';
         listData += '        </thead>';
         listData += '        <tbody>';
@@ -200,8 +284,9 @@
           console.log(fields);
           listData += '            <tr>';
           listData += '                <td class="col-date">' + fields.receivedAt + '</td>';
-          listData += '<td class="col-message">' + fields.userMessage + '</td>';
-          listData += '<td><span class="error-tag status-none">' + fields.content + '</span></td>';
+          listData += '                <td class="col-name">' + fields.name + '</td>';
+          listData += '                <td class="col-message">' + fields.userMessage + '</td>';
+          listData += '                <td><span class="error-tag status-none">' + fields.content + '</span></td>';
           listData += '            </tr>';
         });
         listData += '        </tbody>';
@@ -267,12 +352,33 @@
     <div id="menu_screen" class="screen active">
       <div class="nav-bar">
         <p>表示したい統計データを選択してください</p>
+        <button class="btn" style="background-color: #663300;" onclick="showScreen('summary_screen')">サマリ</button>
         <button onclick="showScreen('keyword_screen')">キーワード別の推移</button>
         <button class="secondary" onclick="showScreen('answer_screen')">問題解決の回答傾向の推移</button>
         <button class="tertiary" onclick="showScreen('status_screen')">異常終了の推移</button>
-        <button class="btn" style="background-color: gray;" id="downloadBtn" onclick="handleDownload()">データをダウンロードする</button>
+        <button class="btn" style="background-color: gray;" id="downloadBtn" onclick="handleDownload()">データのダウンロード</button>
         <p id="msg"></p>
       </div>
+    </div>
+
+    <div id="summary_screen" class="screen">
+      <div class="nav-bar">
+        <button class="back" onclick="showScreen('menu_screen')">← 戻る</button>
+        <span style="font-weight: bold; margin-left: 10px;">サマリ</span>
+      </div>
+      <center>
+      <div class="nav-bar">キーワード別</div>
+      <div id="summary_chart_keyword_div" style="width: 100%; height:auto;"></div>
+      <hr>
+      <div class="nav-bar">問題解決の回答別</div>
+      <div id="summary_chart_answer_div" style="width: 100%; height:auto;"></div>
+      <hr>
+       <div class="nav-bar">異常終了別</div>
+       <div id="summary_chart_status_div" style="width: 100%; height:auto;"></div>
+      <hr>
+       <div class="nav-bar">質問者別</div>
+       <div id="summary_chart_user_div" style="width: 100%; height:auto;"></div>
+      </center>
     </div>
 
     <div id="keyword_screen" class="screen">
@@ -335,11 +441,13 @@
       <hr>
       <h3>「未回答」</h3>
       <div id="answer_list_other_div" style="width: 100%;"></div>
+      <!--
       <hr>
       <div class="nav-bar">
         総評
       </div>
       <div id="answer_chart3_div" style="width: 100%; height: 160px; margin-bottom: 40px;"></div>
+      -->
       </center>
     </div>
 
@@ -360,14 +468,15 @@
       <hr>
       <h3>else</h3>
       <div id="status_list_received_div" style="width: 100%;"></div>
+      <!--
       <hr>
       <div class="nav-bar">
         総評
       </div>
       <div id="status_chart3_div" style="width: 100%; height: 160px; margin-bottom: 40px;"></div>
+      -->
       </center>
     </div>
 
   </body>
 </html>
-

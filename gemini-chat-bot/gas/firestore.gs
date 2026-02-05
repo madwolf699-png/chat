@@ -15,6 +15,180 @@ function doGet() {
       .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 
+// パターン0：サマリの集計
+function getSummaryData(keywordList) {
+  //let keywordList=["該当なし","喫煙所"];
+  console.log(keywordList);
+
+  // キーワード別の総集計
+  const data = getRawFirestoreData(setQueryFromTo(null));
+  let sum = {"all": 0};
+  let sum_user = {"all": 0};
+  keywordList.forEach(function(key){
+    sum[key] = 0;
+  });
+  data.forEach(fields => {
+    const response = fields.response?.stringValue || "(nothing)";
+    const request = fields.request.mapValue.fields;
+    const displayName = 
+    //console.log("response", response);
+    sum.all++;
+    sum_user.all++;
+    keywordList.forEach(item => {
+      if (response.includes(item)) {
+        sum[item]++;
+      }
+    });
+    let name = request?.displayName?.stringValue ?? "名称未設定";
+    if (name) {
+      if (!sum_user[name]) sum_user[name] = 0;
+    }
+    sum_user[name]++;
+  });
+  //const chartData = [["要素", "数値"]];
+  const chartData_keyword = [["要素", "数値", { role: 'style' }]];
+  let sortedArray_keyword = Object.entries(sum);
+  sortedArray_keyword.sort((a, b) => b[1] - a[1]);
+  sortedArray_keyword.forEach(([key, value]) =>　{
+    // "all" は全体の合計値なので、比較用の棒グラフからは除外したい場合が多い
+    if (key !== "all") {
+      //chartData.push([key, value]);
+      chartData_keyword.push([key, value, 'color: #006666']);
+    } else {
+      //chartData.push(["全て", value]);
+      chartData_keyword.push(["全て", value, 'color: #0033cc']);
+    }
+  });
+
+  // 質問者別の総集計
+  const chartData_user = [["要素", "数値", { role: 'style' }]];
+  let sortedArray_user = Object.entries(sum_user);
+  sortedArray_user.sort((a, b) => b[1] - a[1]);
+  sortedArray_user.forEach(([key, value]) =>　{
+    // "all" は全体の合計値なので、比較用の棒グラフからは除外したい場合が多い
+    if (key !== "all") {
+      //chartData.push([key, value]);
+      chartData_user.push([key, value, 'color: #006666']);
+    } else {
+      //chartData.push(["全て", value]);
+      chartData_user.push(["全て", value, 'color: #0033cc']);
+    }
+  });
+
+  // 回答別の総集計
+  var sum_yes = getRecordCountFirestoreData(setQueryRecordCount(
+    null,
+    [
+      {
+        fieldFilter: {
+          field: { fieldPath: "answer" }, // 任意のフィールド名
+          op: "EQUAL",
+          value: { stringValue: "yes" } // 一致させたい値
+        }
+      }
+    ]));
+  var sum_no = getRecordCountFirestoreData(setQueryRecordCount(
+    null,
+    [
+      {
+        fieldFilter: {
+          field: { fieldPath: "answer" }, // 任意のフィールド名
+          op: "EQUAL",
+          value: { stringValue: "no" } // 一致させたい値
+        }
+      }
+    ]));
+  var sum_other = getRecordCountFirestoreData(setQueryRecordCount(
+    null,
+    [
+      {
+        fieldFilter: {
+          field: { fieldPath: "answer" }, // 任意のフィールド名
+          op: "NOT_IN", // ここがポイント
+          value: {
+            arrayValue: {
+              values: [
+                { stringValue: "yes" },
+                { stringValue: "no" }
+              ]
+            }
+          }
+        }
+      }
+    ]));
+  var chartData_answer = [
+    ['Category', 'はい', 'いいえ', '未回答'],
+    ['比率', sum_yes, sum_no, sum_other] // 合計値は自動計算されるので実数でOK
+  ];
+  var series_answer = {
+    0: { color: '#EA4335' }, // はい（赤）
+    1: { color: '#FBBC05' }, // いいえ（黄）
+    2: { color: '#34A853' }  // 未回答（緑）
+  };
+
+  // エラーの総集計
+  // 総数
+  var sum_error = getRecordCountFirestoreData(setQueryRecordCount(
+    null,
+    [
+      {
+        fieldFilter: {
+          field: { fieldPath: "status" }, // 任意のフィールド名
+          op: "EQUAL",
+          value: { stringValue: "error" } // 一致させたい値
+        }
+      }
+    ]));
+  var sum_done = getRecordCountFirestoreData(setQueryRecordCount(
+    null,
+    [
+      {
+        fieldFilter: {
+          field: { fieldPath: "status" }, // 任意のフィールド名
+          op: "EQUAL",
+          value: { stringValue: "done" } // 一致させたい値
+        }
+      }
+    ]));
+  var sum_else = getRecordCountFirestoreData(setQueryRecordCount(
+    null,
+    [
+      {
+        fieldFilter: {
+          field: { fieldPath: "status" }, // 任意のフィールド名
+          op: "NOT_IN", // ここがポイント
+          value: {
+            arrayValue: {
+              values: [
+                { stringValue: "error" },
+                { stringValue: "done" }
+              ]
+            }
+          }
+        }
+      }
+    ]));
+  var chartData_status = [
+    ['Category', 'error', 'else', 'done'],
+    ['比率', sum_error, sum_else, sum_done] // 合計値は自動計算されるので実数でOK
+  ];
+  var series_status = {
+    0: { color: '#EA4335' }, // error（赤）
+    1: { color: '#FBBC05' }, // received（黄）
+    2: { color: '#34A853' }  // done（緑）
+  };
+
+  return {
+    chartData_keyword: chartData_keyword,
+    chartData_user: chartData_user,
+    chartData_answer: chartData_answer,
+    chartData_status: chartData_status,
+    series_answer,
+    series_status,
+    title: 'キーワード別の総集計'
+  };
+}
+
 // パターン1：キーワードの集計
 function getKeywordData(keyword) {
   //keyword = "転居（引っ越し）";
@@ -69,7 +243,7 @@ function getKeywordData(keyword) {
   // パーセンテージ
   var chartData2 = [
     ['Category', keyword, "その他"],
-    ['タスク比率', stats_sum.keyword, stats_sum.other] // 合計値は自動計算されるので実数でOK
+    ['比率', stats_sum.keyword, stats_sum.other] // 合計値は自動計算されるので実数でOK
   ];
 
   // 総数
@@ -88,7 +262,8 @@ function getKeywordData(keyword) {
     chartData2: chartData2, 
     series: series, 
     listData: listData, 
-    title: displayTitle
+    title: displayTitle,
+    keyword: keyword
   };
 }
 
@@ -118,6 +293,7 @@ function getAnswerData() {
       stats_sum.no++;
         listData_no.push({
           receivedAt: getDateFromISOString(fields.receivedAt.timestampValue),
+          name: request?.displayName?.stringValue ?? "名称未設定",
           userMessage: request.userMessage?.stringValue ? request.userMessage?.stringValue : "(nothing)",
           content: response,
           //content: JSON.stringify(fields.error),
@@ -127,6 +303,7 @@ function getAnswerData() {
       stats_sum.other++;
         listData_other.push({
           receivedAt: getDateFromISOString(fields.receivedAt.timestampValue),
+          name: request?.displayName?.stringValue ?? "名称未設定",
           userMessage: request.userMessage?.stringValue ? request.userMessage?.stringValue : "(nothing)",
           content: response,
           //content: JSON.stringify(fields.error),
@@ -144,53 +321,7 @@ function getAnswerData() {
   // パーセンテージ
   var chartData2 = [
     ['Category', 'はい', 'いいえ', '未回答'],
-    ['タスク比率', stats_sum.yes, stats_sum.no,stats_sum.other] // 合計値は自動計算されるので実数でOK
-  ];
-
-  // 総数
-  var sum_yes = getRecordCountFirestoreData(setQueryRecordCount(
-    null,
-    [
-      {
-        fieldFilter: {
-          field: { fieldPath: "answer" }, // 任意のフィールド名
-          op: "EQUAL",
-          value: { stringValue: "yes" } // 一致させたい値
-        }
-      }
-    ]));
-  var sum_no = getRecordCountFirestoreData(setQueryRecordCount(
-    null,
-    [
-      {
-        fieldFilter: {
-          field: { fieldPath: "answer" }, // 任意のフィールド名
-          op: "EQUAL",
-          value: { stringValue: "no" } // 一致させたい値
-        }
-      }
-    ]));
-  var sum_other = getRecordCountFirestoreData(setQueryRecordCount(
-    null,
-    [
-      {
-        fieldFilter: {
-          field: { fieldPath: "answer" }, // 任意のフィールド名
-          op: "NOT_IN", // ここがポイント
-          value: {
-            arrayValue: {
-              values: [
-                { stringValue: "yes" },
-                { stringValue: "no" }
-              ]
-            }
-          }
-        }
-      }
-    ]));
-  var chartData3 = [
-    ['Category', 'はい', 'いいえ', '未回答'],
-    ['タスク比率', sum_yes, sum_no, sum_other] // 合計値は自動計算されるので実数でOK
+    ['比率', stats_sum.yes, stats_sum.no,stats_sum.other] // 合計値は自動計算されるので実数でOK
   ];
 
   var series = {
@@ -206,7 +337,6 @@ function getAnswerData() {
     series: series, 
     listData_no: listData_no, 
     listData_other: listData_other, 
-    chartData3: chartData3,
     title: '問題解決の回答傾向の時系列推移'
   };
 }
@@ -235,6 +365,7 @@ function getStatusData() {
       stats_sum.error++;
       listData_error.push({
         receivedAt: getDateFromISOString(fields.receivedAt.timestampValue),
+        name: request?.displayName?.stringValue ?? "名称未設定",
         userMessage: request.userMessage?.stringValue ? request.userMessage?.stringValue : "(nothing)",
         content: error.message?.stringValue ? error.message?.stringValue : "(nothing)",
         //content: JSON.stringify(fields.error),
@@ -247,6 +378,7 @@ function getStatusData() {
       stats_sum.received++;
       listData_received.push({
         receivedAt: getDateFromISOString(fields.receivedAt.timestampValue),
+        name: request?.displayName?.stringValue ?? "名称未設定",
         userMessage: request.userMessage?.stringValue ? request.userMessage?.stringValue : "(nothing)",
         content: error.message?.stringValue ? error.message?.stringValue : "(nothing)",
         //content: JSON.stringify(fields.error),
@@ -264,53 +396,7 @@ function getStatusData() {
   // パーセンテージ
   var chartData2 = [
     ['Category', 'error', 'else', 'done'],
-    ['タスク比率', stats_sum.error, stats_sum.received, stats_sum.done] // 合計値は自動計算されるので実数でOK
-  ];
-
-  // 総数
-  var sum_error = getRecordCountFirestoreData(setQueryRecordCount(
-    null,
-    [
-      {
-        fieldFilter: {
-          field: { fieldPath: "status" }, // 任意のフィールド名
-          op: "EQUAL",
-          value: { stringValue: "error" } // 一致させたい値
-        }
-      }
-    ]));
-  var sum_done = getRecordCountFirestoreData(setQueryRecordCount(
-    null,
-    [
-      {
-        fieldFilter: {
-          field: { fieldPath: "status" }, // 任意のフィールド名
-          op: "EQUAL",
-          value: { stringValue: "done" } // 一致させたい値
-        }
-      }
-    ]));
-  var sum_else = getRecordCountFirestoreData(setQueryRecordCount(
-    null,
-    [
-      {
-        fieldFilter: {
-          field: { fieldPath: "status" }, // 任意のフィールド名
-          op: "NOT_IN", // ここがポイント
-          value: {
-            arrayValue: {
-              values: [
-                { stringValue: "error" },
-                { stringValue: "done" }
-              ]
-            }
-          }
-        }
-      }
-    ]));
-  var chartData3 = [
-    ['Category', 'error', 'else', 'done'],
-    ['タスク比率', sum_error, sum_else, sum_done] // 合計値は自動計算されるので実数でOK
+    ['比率', stats_sum.error, stats_sum.received, stats_sum.done] // 合計値は自動計算されるので実数でOK
   ];
 
   var series = {
@@ -326,7 +412,6 @@ function getStatusData() {
     series: series, 
     listData_error: listData_error, 
     listData_received: listData_received, 
-    chartData3: chartData3,
     title: '異常終了の時系列推移'
   };
 }
