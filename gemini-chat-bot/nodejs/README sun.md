@@ -501,3 +501,14 @@ sudo apt install npm
   ```bash
   curl -X GET https://generativelanguage.googleapis.com/v1beta/models?key=XXXXXX
   ```
+
+## ロカルで確認試験をするために
+- 環境変数
+  ```bash
+  export GEMINI_API_KEY=
+  export SPREADSHEET_ID=
+  export FIRESTORE_DOC=chat_logs
+  export PROJECT_ID=sun-internal-chat
+  export TARGET_URL=https://chat-worker-617913681837.asia-northeast1.run.app/reload
+  export GOOGLE_APPLICATION_CREDENTIALS=~/sun-internal-chat-5cb5315565ce.json
+  ```

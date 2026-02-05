@@ -169,16 +169,26 @@ await initTokenizer();
 async function tokenize(text) {
   console.log("###### tokenize start ######");
   if (!text || typeof text != "string") return [];
+  // 英数字を先に抽出
+  const alphanumTokens = text.match(/[A-Za-z0-9]+/g) ?? [];
   const tokenizer = await initTokenizer();
   const tokens = tokenizer.tokenize(text);
   //console.log("------ tokens ------\n", tokens);
-  const keywords = tokens
+  const nounTokens = tokens
   .filter(t =>
-     t.pos === "名詞"
-     // ||
-     //(t.pos === "動詞" && t.basic_form)
-    )
-  .map(t => t.basic_form || t.surface_form);
+    t.pos === "名詞"
+    //&& t.pos_detail_1 === "固有名詞"
+    //t.surface_form !== "*" // 念のため
+    // ||
+    //(t.pos === "動詞" && t.basic_form)
+  )
+  .map(t => t.surface_form);
+  //.map(t => t.basic_form || t.surface_form);
+  // マージ & 重複排除
+  const keywords = [...new Set([
+    ...alphanumTokens,
+    ...nounTokens
+  ])];
   return keywords;
   //return tokens.map(t => t.surface_form);
 }
@@ -191,7 +201,7 @@ export async function searchRules(rules, question) {
   //console.log("----- question ------\n", question)
   const keywords = await tokenize(question);  // kuromoji
   //const keywords = segmenter.segment(question); // TinySegmenter
-  //console.log("----- keywords ------\n", keywords)
+  console.log("----- keywords ------\n", keywords)
   const related = rules.filter(r =>
     keywords.some(k =>
     (r.title + r.body).includes(k)
@@ -242,6 +252,7 @@ export async function geminiApi(related, userMessage) {
     ${related}
     `;
     /**/
+    //console.log("------ INTERNAL_RULES ------\n", INTERNAL_RULES);
     console.log("------ Gemini API start ------");
     const result = await model.generateContent({
         contents: [
@@ -319,7 +330,7 @@ export async function saveChat(receivedAt, msg, answer, err, status) {
   const doc = {
     request: {
       spaceName: msg?.space?.name ? msg?.space?.name : "",
-      //displayName: msg?.sender?.displayName,
+      displayName: msg?.sender?.displayName ? msg?.sender?.displayName : "",
       //email: msg?.sender?.email,
       userMessage: msg?.text ? msg?.text : "",
     },
