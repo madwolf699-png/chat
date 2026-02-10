@@ -84,6 +84,7 @@ const sheetsAuth = new google.auth.GoogleAuth({
 //console.log('GOOGLE_APPLICATION_CREDENTIALS=', process.env.GOOGLE_APPLICATION_CREDENTIALS);
 const sheets = google.sheets({ version: "v4", auth: sheetsAuth  });
 
+/* ========= Firestore ========= */
 console.log("FIRESTORE_DOC=", process.env.FIRESTORE_DOC);
 console.log("PROJECT_ID=", process.env.PROJECT_ID);
 //console.log("SERVICE=", process.env.K_SERVICE);
@@ -231,18 +232,27 @@ export async function sendToChat(spaceName, { text, cardsV2 }) {
   const body = {};
   if (text) body.text = text;
   if (cardsV2) body.cardsV2 = cardsV2;
-
-  await fetch(
-    `https://chat.googleapis.com/v1/${spaceName}/messages`,
-    {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${accessToken.token}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify(body)
-    }
-  );
+  try {
+    const response = await fetch(
+      `https://chat.googleapis.com/v1/${spaceName}/messages`,
+      {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${accessToken.token}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(body)
+      }
+    );
+    /*
+    console.log("Status:", response.status);
+    console.log("OK:", response.ok);
+    const result = await response.json();
+    console.log("Response Body:", result);
+    */
+  } catch (error) {
+    console.error("Fetch Error:", error);
+  }
 }
 
 export async function geminiApi(related, userMessage) {
@@ -343,6 +353,7 @@ export async function saveChat(receivedAt, msg, answer, err, status) {
     status: status,
     isHit: answer ? (answer.includes("該当なし") ? false : true) : false,
     answer: "",
+    reason: "",
     receivedAt: receivedAt,
     sendedAt: answer ? new Date() : "",
     updatedAt: answer || err  ? new Date() : ""
@@ -351,6 +362,7 @@ export async function saveChat(receivedAt, msg, answer, err, status) {
 }
 
 export async function saveAnswer(docId, answer) {
+  console.log("###### saveAnswer start ######");
   const docRef = db.collection(process.env.FIRESTORE_DOC).doc(docId);
   await docRef.set(
     {
@@ -371,14 +383,11 @@ export async function saveAnswer(docId, answer) {
 }
 
 export function setCardPayload(spaceName, threadName, docRef) {
-  console.log("###### setConfirm start ######");
+  console.log("###### setCardPayload start ######");
   console.log("docRef.id =", docRef.id);
   //console.log("spaceName =", spaceName);
   //console.log("threadName =", threadName);
-  const docId = String(docRef.id);
-  /**/
-  /**/
-  /**/
+  //const docId = String(docRef.id);
   return (
     {
       parent: spaceName, // "spaces/XXXXX" の形式
@@ -421,7 +430,8 @@ export function setCardPayload(spaceName, threadName, docRef) {
                                   { key: "docId", value: docRef.id}
                                 ]
                               }
-                            }
+                            },
+                            color: { red: 0.8, green: 0.1, blue: 0.1, alpha: 1 }
                           }
                         ]
                       }
@@ -435,31 +445,6 @@ export function setCardPayload(spaceName, threadName, docRef) {
       }
     }
   );
-  /**/
-  /*
-  return (
-    {
-      cardsV2: [
-        {
-          cardId: "test",
-          card: {
-            sections: [
-              {
-                widgets: [
-                  {
-                    textParagraph: {
-                      text: "この問題は解決しましたか？\n「はい」か「いいえ」を入力してお答えください。\n（「」は不要です）"
-                    }
-                  },
-                ]
-              },
-            ]
-          }
-        }
-      ]
-    }
-  );
-  */
 }
 
 export async function sendChatCard(payload) {
@@ -479,5 +464,86 @@ export async function sendChatCard(payload) {
     console.log('Message sent:', response.data.name);
   } catch (error) {
     console.error('Error sending message to Google Chat:', error);
+  }
+}
+
+export async function saveReason(docId, reason) {
+  console.log("###### saveReason start ######");
+  const docRef = db.collection(process.env.FIRESTORE_DOC).doc(docId);
+  await docRef.set(
+    {
+      reason: reason,
+      updatedAt: new Date()
+    },
+    { merge: true } // 既存のフィールドを保持したまま更新
+  );
+}
+
+async function getDocumentById(docId) {
+  console.log("###### getDocumentById start ######");
+  try {
+    // 1. ドキュメントのリファレンスを取得
+    const docRef = db.collection(process.env.FIRESTORE_DOC).doc(docId);
+    // 2. データを取得
+    const doc = await docRef.get();
+   // 3. 存在チェック
+    if (!doc.exists) {
+      console.log('ドキュメントが見つかりませんでした');
+      return null;
+    }
+    // 4. データの取り出し
+    const data = doc.data();
+    //console.log('取得したデータ:', data);
+    return data;
+    
+  } catch (error) {
+    console.error('エラーが発生しました:', error);
+  }
+}
+
+export async function sendToWebhook(docId) {
+  console.log("###### sendToWebhook start ######");
+  const webhookUrl = process.env.WEBHOOK_URL;
+  //console.log("webhookUrl:", webhookUrl);
+  const doc = await getDocumentById(docId);
+  const receivedAt = doc.receivedAt.toDate();
+  const msg = `
+回答「いいえ」に対する理由が入力されました。\n
+■受信日時
+${receivedAt.toLocaleString('ja-JP')}\n
+■氏名
+${doc.request.displayName}\n
+■質問
+${doc.request.userMessage}\n
+■回答
+${doc.response}\n
+■いいえの理由
+${doc.reason}\n
+`;
+
+  const data = JSON.stringify({
+    text: msg
+  });
+  console.log("data:", data);
+  try {
+    const response = await fetch(
+      webhookUrl,
+      {
+        method: "POST",
+        headers: {
+        'Content-Type': 'application/json; charset=UTF-8',
+        //'Content-Length': data.length,
+        },
+        body: data
+      }
+    );
+    /*
+    console.log("Status:", response.status);
+    console.log("OK:", response.ok);
+    const result = await response.json();
+    console.log("Response Body:", result);
+    */
+  } catch (error) {
+    console.error("Fetch Error:", error);
   }
 }
