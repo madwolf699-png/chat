@@ -11,6 +11,8 @@ import {
   setCardPayload,
   sendChatCard,
   saveAnswer,
+  saveReason,
+  sendToWebhook
 } from "./anyFunc.js";
 
 /* ========= Express ========== */
@@ -53,6 +55,11 @@ app.post("/", async(req, res) => {
         await saveAnswer(params.docId, "yes");
       } else if (action.actionMethodName === 'handle_no') {
         await saveAnswer(params.docId, "no");
+      } else if (action.actionMethodName === 'submit_reason') {
+        const formInputs = event.common.formInputs;
+        const reasonValue = formInputs["reason_text"].stringInputs.value[0];
+        await saveReason(params.docId, reasonValue);
+        await sendToWebhook(params.docId);
       }
       /*
       res.json({
