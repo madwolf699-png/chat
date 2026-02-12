@@ -16,194 +16,324 @@ function doGet() {
 }
 
 // パターン0：サマリの集計
-function getSummaryData(keywordList) {
-  //let keywordList=["該当なし","喫煙所"];
-  console.log(keywordList);
+function getSummaryData(keywords) {
+  // 現在日
+  const now = new Date();
+  // 今月初日
+  const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+  const fromto_to_today = getFromTo(firstDay, now);
+  const year = now.getFullYear();
+  const month = now.getMonth(); // 今月のインデックス (0-11)
+  // 先月初日
+  const firstDayLastMonth = new Date(year, month - 1, 1);
+  //先月末日
+  const lastDayLastMonth = new Date(year, month, 0);
+  const fromto_last_month = getFromTo(firstDayLastMonth, lastDayLastMonth);
+  // 昨日
+  const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+  const fromto_yesterday = getFromTo(yesterday, yesterday);
+  // 一昨日
+  const beforeYesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 2);
+  const fromto_beforeYesterday = getFromTo(beforeYesterday, beforeYesterday);
+  const dayOfWeek = now.getDay(); // 日(0)〜土(6)
+  // 今週の月曜日を基準にするための差分を計算
+  // 日曜(0)の場合は -6、それ以外は -(dayOfWeek - 1)
+  const diffToMonday = (dayOfWeek === 0) ? -6 : -(dayOfWeek - 1);
+  const thisMonday = new Date(now.getFullYear(), now.getMonth(), now.getDate() + diffToMonday);
+// --- 先週 (今週の月曜から 7日前〜1日前) ---
+  const lastWeekStart = new Date(thisMonday.getFullYear(), thisMonday.getMonth(), thisMonday.getDate() - 7);
+  const lastWeekEnd   = new Date(thisMonday.getFullYear(), thisMonday.getMonth(), thisMonday.getDate() - 1);
+  const fromto_last_week = getFromTo(lastWeekStart, lastWeekEnd);
+  // --- 先々週 (今週の月曜から 14日前〜8日前) ---
+  const beforeLastWeekStart = new Date(thisMonday.getFullYear(), thisMonday.getMonth(), thisMonday.getDate() - 14);
+  const beforeLastWeekEnd   = new Date(thisMonday.getFullYear(), thisMonday.getMonth(), thisMonday.getDate() - 8);
+  const fromto_two_weeks_ago = getFromTo(beforeLastWeekStart, beforeLastWeekEnd);
 
-  // キーワード別の総集計
-  const data = getRawFirestoreData(setQueryFromTo(null));
-  let sum = {"all": 0};
-  let sum_user = {"all": 0};
-  keywordList.forEach(function(key){
-    sum[key] = 0;
+  //------------------------------------------------------------------------------
+  // 今月初めから今日までのリクエスト数
+  //------------------------------------------------------------------------------
+  var request_num_to_today = getRecordCountFirestoreData(setQueryRecordCount(
+    fromto_to_today,
+    null
+    ));
+  var request_num_last_month = getRecordCountFirestoreData(setQueryRecordCount(
+    fromto_last_month,
+    null
+    ));
+
+  //------------------------------------------------------------------------------
+  // 昨日のリクエスト数
+  //------------------------------------------------------------------------------
+  var request_num_yesterday = getRecordCountFirestoreData(setQueryRecordCount(
+    fromto_yesterday,
+    null
+    ));
+  var request_num_before_yesterday = getRecordCountFirestoreData(setQueryRecordCount(
+    fromto_beforeYesterday,
+    null
+    ));
+
+  //------------------------------------------------------------------------------
+  // 今月初めから今日までの総ユーザ数
+  // 対象範囲で全件取得して「氏名」で重複排除する。
+  //------------------------------------------------------------------------------
+  let data = getRawFirestoreData(setQueryFromTo(fromto_to_today));
+  let users = data.flatMap(doc => {
+    const nameField = doc.request.mapValue.fields?.displayName;
+    // nameFieldが { stringValue: "ユーザー名" } という構造なら .stringValue を取る
+    return nameField?.stringValue ? [nameField.stringValue] : ['名称未設定'];
   });
-  data.forEach(fields => {
+  let distinctUsers = [...new Set(users)];
+  var user_num_to_today = distinctUsers.length;
+
+  data = getRawFirestoreData(setQueryFromTo(fromto_last_month));
+  users = data.flatMap(doc => {
+    const nameField = doc.request.mapValue.fields?.displayName;
+    // nameFieldが { stringValue: "ユーザー名" } という構造なら .stringValue を取る
+    return nameField?.stringValue ? [nameField.stringValue] : ['名称未設定'];
+  });
+  distinctUsers = [...new Set(users)];
+  var user_num_last_month = distinctUsers.length;
+
+  //------------------------------------------------------------------------------
+  // 過去１週間のリクエスト数
+  //------------------------------------------------------------------------------
+  var request_num_last_week = getRecordCountFirestoreData(setQueryRecordCount(
+    fromto_last_week,
+    null
+    ));
+  var request_num_two_weeks_ago = getRecordCountFirestoreData(setQueryRecordCount(
+    fromto_two_weeks_ago,
+    null
+    ));
+
+  //------------------------------------------------------------------------------
+  // 過去７日間のリクエスト数の推移
+  //------------------------------------------------------------------------------
+  let data_last_week = getRawFirestoreData(setQueryFromTo(fromto_last_week));
+  let data_two_weeks_ago = getRawFirestoreData(setQueryFromTo(fromto_two_weeks_ago));
+  const stats = {};
+  stats[fromto_last_week.date_from_formatted.slice(0, 10)] = { last_week:0, two_weeks_ago: 0 };
+
+  let isoString = fromto_last_week.date_from_isoString;
+  for (let i = 0; i < 6; i++) {
+    // 1. ISO文字列をDateオブジェクトに変換
+    let date = new Date(isoString);
+    // 2. 1日加算する
+    date.setDate(date.getDate() + 1);
+    // 3. 再びISO文字列に変換して上書き
+    isoString = date.toISOString();
+    //console.log(`${i + 1}日後: ${isoString}`);
+    stats[getDateFromISOString(isoString).slice(0, 10)] = { last_week:0, two_weeks_ago: 0 };
+  }
+
+  data_last_week.forEach(fields => {
+    const date = getDateFromISOString(fields.receivedAt.timestampValue);
+    //const date = fields.receivedAt.timestampValue.split('T')[0];
+    stats[date.slice(0, 10)].last_week++;
+  });
+  data_two_weeks_ago.forEach(fields => {
+    const date = getDateFromISOString(fields.receivedAt.timestampValue);
+    //const date = fields.receivedAt.timestampValue.split('T')[0];
+    const d2 = new Date(date);
+    // getDay() は 曜日を 0〜6 の数値で返す (0:日, 1:月, 2:火...)
+    const day2_num = d2.getDay();
+    let isoString = fromto_last_week.date_from_isoString;
+    for (let i = 0; i < 7; i++) {
+      const d1 = new Date(getDateFromISOString(isoString));
+      const day1_num = d1.getDay();
+      if (day1_num === day2_num) stats[d1.slice(0, 10)].two_weeks_ago++;
+      // 1. ISO文字列をDateオブジェクトに変換
+      let date = new Date(isoString);
+      // 2. 1日加算する
+      date.setDate(date.getDate() + 1);
+      // 3. 再びISO文字列に変換して上書き
+      isoString = date.toISOString();
+    }
+  });
+
+  const chartData_last_week = [["日付", "リクエスト数", "リクエスト数(前の7日間)"]];
+  const sortedDates = Object.keys(stats).sort();
+  sortedDates.forEach(date => {
+    chartData_last_week.push([date, stats[date].last_week, stats[date].two_weeks_ago]);
+  });
+
+  //------------------------------------------------------------------------------
+  // 過去７日間のリクエスト数におけるキーワードヒットの割合
+  //------------------------------------------------------------------------------
+  /*
+  const keywords = [
+    {key: "通勤手当", value:"通勤手当"},
+    {key: "喫煙所", value: "喫煙所"},
+  ]
+  */
+  //console.log(keywords);
+  let sum_keyword_last_week_all = 0;
+  let sum_keyword_last_week = {};
+  for (let i = 0; i < keywords.length; i++) {
+    let val = keywords[i].value;
+    sum_keyword_last_week[val] = 0;
+  }
+  data_last_week.forEach(fields => {
     const response = fields.response?.stringValue || "(nothing)";
-    const request = fields.request.mapValue.fields;
-    const displayName = 
-    //console.log("response", response);
-    sum.all++;
-    sum_user.all++;
-    keywordList.forEach(item => {
-      if (response.includes(item)) {
-        sum[item]++;
+    sum_keyword_last_week_all++;
+    for (let i = 0; i < keywords.length; i++) {
+      let val = keywords[i].value;
+      if (response.includes(val)) {
+        sum_keyword_last_week[val]++;
       }
-    });
-    let name = request?.displayName?.stringValue ?? "名称未設定";
-    if (name) {
-      if (!sum_user[name]) sum_user[name] = 0;
     }
-    sum_user[name]++;
   });
-  //const chartData = [["要素", "数値"]];
-  const chartData_keyword = [["要素", "数値", { role: 'style' }]];
-  let sortedArray_keyword = Object.entries(sum);
-  sortedArray_keyword.sort((a, b) => b[1] - a[1]);
-  sortedArray_keyword.forEach(([key, value]) =>　{
-    // "all" は全体の合計値なので、比較用の棒グラフからは除外したい場合が多い
-    if (key !== "all") {
-      //chartData.push([key, value]);
-      chartData_keyword.push([key, value, 'color: #006666']);
+  let entries_sum_last_week = Object.entries(sum_keyword_last_week);
+  entries_sum_last_week.sort((a, b) => {
+    return b[1] - a[1]; // bの値 - aの値 が正ならbを前に持ってくる
+  });
+  let top10_sum_last_week = entries_sum_last_week.slice(0, 10);
+  const pieChart_keyword_last_week = [['キーワード', '数']];
+  top10_sum_last_week.forEach(row => {
+    sum_keyword_last_week_all -= row[1];
+    pieChart_keyword_last_week.push([row[0], row[1]]);
+  });
+  //pieChart_keyword_last_week.push(['その他', sum_keyword_last_week_all]);
+  
+  let sum_keyword_two_weeks_ago_all = 0;
+  let sum_keyword_two_weeks_ago = {};
+  for (let i = 0; i < keywords.length; i++) {
+    let val = keywords[i].value;
+    sum_keyword_two_weeks_ago[val] = 0;
+  }
+  data_two_weeks_ago.forEach(fields => {
+    const response = fields.response?.stringValue || "(nothing)";
+    sum_keyword_two_weeks_ago_all++;
+    for (let i = 0; i < keywords.length; i++) {
+      let val = keywords[i].value;
+      if (response.includes(val)) {
+        sum_keyword_two_weeks_ago[val]++;
+      }
+    }
+  });
+  let entries_sum_two_weeks_ago = Object.entries(sum_keyword_two_weeks_ago);
+  entries_sum_two_weeks_ago.sort((a, b) => {
+    return b[1] - a[1]; // bの値 - aの値 が正ならbを前に持ってくる
+  });
+  let top10_sum_two_weeks_ago = entries_sum_two_weeks_ago.slice(0, 10);
+  const pieChart_keyword_two_weeks_ago = [['キーワード', '数']];
+  top10_sum_two_weeks_ago.forEach(row => {
+    sum_keyword_two_weeks_ago_all -= row[1];
+    pieChart_keyword_two_weeks_ago.push([row[0], row[1]]);
+  });
+  //pieChart_keyword_two_weeks_ago.push(['その他', sum_keyword_two_weeks_ago_all]);
+
+  //------------------------------------------------------------------------------
+  // 過去７日間のリクエスト数における回答の割合
+  //------------------------------------------------------------------------------
+  let sum_answer_last_week = { yes: 0, no:0, other: 0 };
+  data_last_week.forEach(fields => {
+    const answer = fields.answer?.stringValue || "";
+    if (answer === "yes") {
+      sum_answer_last_week.yes++;
+    } else if (answer === "no") {
+      sum_answer_last_week.no++;
     } else {
-      //chartData.push(["全て", value]);
-      chartData_keyword.push(["全て", value, 'color: #0033cc']);
+      sum_answer_last_week.other++;
     }
   });
-
-  // 質問者別の総集計
-  const chartData_user = [["要素", "数値", { role: 'style' }]];
-  let sortedArray_user = Object.entries(sum_user);
-  sortedArray_user.sort((a, b) => b[1] - a[1]);
-  sortedArray_user.forEach(([key, value]) =>　{
-    // "all" は全体の合計値なので、比較用の棒グラフからは除外したい場合が多い
-    if (key !== "all") {
-      //chartData.push([key, value]);
-      chartData_user.push([key, value, 'color: #006666']);
+  const pieChart_answer_last_week = [
+    ['回答', '数'],
+    ['はい', sum_answer_last_week.yes],
+    ['いいえ', sum_answer_last_week.no],
+    ['未回答', sum_answer_last_week.other],
+  ];
+  let sum_answer_two_weeks_ago = { yes: 0, no:0, other: 0 };
+  data_two_weeks_ago.forEach(fields => {
+    const answer = fields.answer?.stringValue || "";
+    if (answer === "yes") {
+      sum_answer_two_weeks_ago.yes++;
+    } else if (answer === "no") {
+      sum_answer_two_weeks_ago.no++;
     } else {
-      //chartData.push(["全て", value]);
-      chartData_user.push(["全て", value, 'color: #0033cc']);
+      sum_answer_two_weeks_ago.other++;
     }
   });
-
-  // 回答別の総集計
-  var sum_yes = getRecordCountFirestoreData(setQueryRecordCount(
-    null,
-    [
-      {
-        fieldFilter: {
-          field: { fieldPath: "answer" }, // 任意のフィールド名
-          op: "EQUAL",
-          value: { stringValue: "yes" } // 一致させたい値
-        }
-      }
-    ]));
-  var sum_no = getRecordCountFirestoreData(setQueryRecordCount(
-    null,
-    [
-      {
-        fieldFilter: {
-          field: { fieldPath: "answer" }, // 任意のフィールド名
-          op: "EQUAL",
-          value: { stringValue: "no" } // 一致させたい値
-        }
-      }
-    ]));
-  var sum_other = getRecordCountFirestoreData(setQueryRecordCount(
-    null,
-    [
-      {
-        fieldFilter: {
-          field: { fieldPath: "answer" }, // 任意のフィールド名
-          op: "NOT_IN", // ここがポイント
-          value: {
-            arrayValue: {
-              values: [
-                { stringValue: "yes" },
-                { stringValue: "no" }
-              ]
-            }
-          }
-        }
-      }
-    ]));
-  var chartData_answer = [
-    ['Category', 'はい', 'いいえ', '未回答'],
-    ['比率', sum_yes, sum_no, sum_other] // 合計値は自動計算されるので実数でOK
+  const pieChart_answer_two_weeks_ago = [
+    ['回答', '数'],
+    ['はい', sum_answer_two_weeks_ago.yes],
+    ['いいえ', sum_answer_two_weeks_ago.no],
+    ['未回答', sum_answer_two_weeks_ago.other],
   ];
-  var series_answer = {
-    0: { color: '#EA4335' }, // はい（赤）
-    1: { color: '#FBBC05' }, // いいえ（黄）
-    2: { color: '#34A853' }  // 未回答（緑）
-  };
 
-  // エラーの総集計
-  // 総数
-  var sum_error = getRecordCountFirestoreData(setQueryRecordCount(
-    null,
-    [
-      {
-        fieldFilter: {
-          field: { fieldPath: "status" }, // 任意のフィールド名
-          op: "EQUAL",
-          value: { stringValue: "error" } // 一致させたい値
-        }
-      }
-    ]));
-  var sum_done = getRecordCountFirestoreData(setQueryRecordCount(
-    null,
-    [
-      {
-        fieldFilter: {
-          field: { fieldPath: "status" }, // 任意のフィールド名
-          op: "EQUAL",
-          value: { stringValue: "done" } // 一致させたい値
-        }
-      }
-    ]));
-  var sum_else = getRecordCountFirestoreData(setQueryRecordCount(
-    null,
-    [
-      {
-        fieldFilter: {
-          field: { fieldPath: "status" }, // 任意のフィールド名
-          op: "NOT_IN", // ここがポイント
-          value: {
-            arrayValue: {
-              values: [
-                { stringValue: "error" },
-                { stringValue: "done" }
-              ]
-            }
-          }
-        }
-      }
-    ]));
-  var chartData_status = [
-    ['Category', 'error', 'else', 'done'],
-    ['比率', sum_error, sum_else, sum_done] // 合計値は自動計算されるので実数でOK
+  //------------------------------------------------------------------------------
+  // 過去７日間のリクエスト数におけるエラーの割合
+  //------------------------------------------------------------------------------
+  let sum_status_last_week = { error: 0, else:0, done: 0 };
+  data_last_week.forEach(fields => {
+    const status = fields.status?.stringValue || "";
+    if (status === "error") {
+      sum_status_last_week.error++;
+    } else if (status === "done") {
+      sum_status_last_week.done++;
+    } else {
+      sum_status_last_week.else++;
+    }
+  });
+  const pieChart_status_last_week = [
+    ['error', '数'],
+    ['error', sum_status_last_week.error],
+    ['else', sum_status_last_week.else],
+    ['done', sum_status_last_week.done],
   ];
-  var series_status = {
-    0: { color: '#EA4335' }, // error（赤）
-    1: { color: '#FBBC05' }, // received（黄）
-    2: { color: '#34A853' }  // done（緑）
-  };
+  let sum_status_two_weeks_ago = { error: 0, else:0, done: 0 };
+  data_two_weeks_ago.forEach(fields => {
+    const status = fields.status?.stringValue || "";
+    if (status === "error") {
+      sum_status_two_weeks_ago.error++;
+    } else if (status === "done") {
+      sum_status_two_weeks_ago.done++;
+    } else {
+      sum_status_two_weeks_ago.else++;
+    }
+  });
+  const pieChart_status_two_weeks_ago = [
+    ['error', '数'],
+    ['error', sum_status_two_weeks_ago.error],
+    ['else', sum_status_two_weeks_ago.else],
+    ['done', sum_status_two_weeks_ago.done],
+  ];
 
   return {
-    chartData_keyword: chartData_keyword,
-    chartData_user: chartData_user,
-    chartData_answer: chartData_answer,
-    chartData_status: chartData_status,
-    series_answer,
-    series_status,
-    title: 'キーワード別の総集計'
+    request_num_to_today: request_num_to_today,
+    request_num_last_month: request_num_last_month,
+    request_num_yesterday: request_num_yesterday,
+    request_num_before_yesterday: request_num_before_yesterday,
+    user_num_to_today: user_num_to_today,
+    user_num_last_month: user_num_last_month,
+    request_num_last_week: request_num_last_week,
+    request_num_two_weeks_ago: request_num_two_weeks_ago,
+    chartData_last_week: chartData_last_week,
+    pieChart_keyword_last_week,
+    pieChart_keyword_two_weeks_ago,
+    pieChart_answer_last_week,
+    pieChart_answer_two_weeks_ago,
+    pieChart_status_last_week,
+    pieChart_status_two_weeks_ago,
   };
 }
 
 // パターン1：キーワードの集計
 function getKeywordData(keyword) {
-  //keyword = "転居（引っ越し）";
-  console.log("keyword: ", keyword);
+  keyword = "該当なし";
+  //console.log("keyword: ", keyword);
   const fromto = getOneMonthAgo();
   const data = getRawFirestoreData(setQueryFromTo(fromto));
   const stats = {};
   let stats_sum = { keyword: 0, other: 0 };
   const listData = [];
   
-  stats[fromto.oneMonthAgo_isoString.split('T')[0]] = { all:0, keyword: 0 };
+  stats[fromto.date_from_formatted.slice(0, 10)] = { all:0, keyword: 0 };
   data.forEach(fields => {
     const response = fields.response?.stringValue || "(nothing)";
     //console.log("response", response);
-    const date = fields.receivedAt.timestampValue.split('T')[0];
+    const date = getDateFromISOString(fields.receivedAt.timestampValue).slice(0, 10);
     if (!stats[date]) stats[date] = { all:0, keyword: 0 };
     const request = fields.request.mapValue.fields;
 
@@ -215,7 +345,9 @@ function getKeywordData(keyword) {
       stats_sum.keyword++;
       if (response.includes("該当なし")) {
         listData.push({
+          docId: fields.docId,
           receivedAt: getDateFromISOString(fields.receivedAt.timestampValue),
+          name: request?.displayName?.stringValue ?? "名称未設定",
           userMessage: request.userMessage?.stringValue ? request.userMessage?.stringValue : "(nothing)",
           content: response,
           //content: JSON.stringify(fields.error),
@@ -231,14 +363,15 @@ function getKeywordData(keyword) {
   const sortedDates = Object.keys(stats).sort();
   if (sortedDates.length === 0) {
     // データが1件もない場合、今日の日付で0件というダミーを入れることでエラーを回避
-    const today = new Date().toISOString().split('T')[0];
+    const today = getDateFromISOString(new Date().toISOString()).slice(0, 10);
+    //const today = new Date().toISOString().split('T')[0];
     chartData.push([today, 0, 0]);
   } else {
     sortedDates.forEach(date => {
       chartData.push([date, stats[date].all, stats[date].keyword]);
     });
   }
-  if (!stats[fromto.now_isoString.split('T')[0]]) stats[fromto.now_isoString.split('T')[0]] = { all:0, keyword: 0 };
+  if (!stats[fromto.date_to_formatted.slice(0, 10)]) stats[fromto.date_to_formatted.slice(0, 10)] = { all:0, keyword: 0 };
 
   // パーセンテージ
   var chartData2 = [
@@ -276,10 +409,11 @@ function getAnswerData() {
   const listData_no = [];
   const listData_other = [];
   
-  stats[fromto.oneMonthAgo_isoString.split('T')[0]] = { all:0, yes: 0, no: 0, other: 0 };
+  stats[fromto.date_from_formatted.slice(0, 10)] = { all:0, yes: 0, no: 0, other: 0 };
   data.forEach(fields => {
     const answer = fields.answer?.stringValue || "";
-    const date = fields.receivedAt.timestampValue.split('T')[0];
+    const date = getDateFromISOString(fields.receivedAt.timestampValue).slice(0, 10);
+    //const date = fields.receivedAt.timestampValue.split('T')[0];
     if (!stats[date]) stats[date] = { all:0, yes: 0, no: 0, other: 0 };
     const request = fields.request.mapValue.fields;
     const response = fields.response?.stringValue || "(nothing)";
@@ -292,16 +426,19 @@ function getAnswerData() {
       stats[date].no++;
       stats_sum.no++;
         listData_no.push({
+          docId: fields.docId,
           receivedAt: getDateFromISOString(fields.receivedAt.timestampValue),
           name: request?.displayName?.stringValue ?? "名称未設定",
           userMessage: request.userMessage?.stringValue ? request.userMessage?.stringValue : "(nothing)",
           content: response,
+          reason: fields.reason?.stringValue || "(nothing)",
           //content: JSON.stringify(fields.error),
         });
     } else {
       stats[date].other++;
       stats_sum.other++;
         listData_other.push({
+          docId: fields.docId,
           receivedAt: getDateFromISOString(fields.receivedAt.timestampValue),
           name: request?.displayName?.stringValue ?? "名称未設定",
           userMessage: request.userMessage?.stringValue ? request.userMessage?.stringValue : "(nothing)",
@@ -316,7 +453,7 @@ function getAnswerData() {
   Object.keys(stats).sort().forEach(date => {
     chartData.push([date, stats[date].all, stats[date].yes, stats[date].no, stats[date].other]);
   });
-  if (!stats[fromto.now_isoString.split('T')[0]]) stats[fromto.now_isoString.split('T')[0]] = { all:0, yes: 0, no: 0, other: 0 };
+  if (!stats[fromto.date_to_formatted.slice(0, 10)]) stats[fromto.date_to_formatted.slice(0, 10)] = { all:0, yes: 0, no: 0, other: 0 };
 
   // パーセンテージ
   var chartData2 = [
@@ -350,11 +487,12 @@ function getStatusData() {
   const listData_error = [];
   const listData_received = [];
 
-  stats[fromto.oneMonthAgo_isoString.split('T')[0]] = { all:0, error: 0, received: 0, done: 0 };
+  stats[fromto.date_from_formatted.slice(0, 10)] = { all:0, error: 0, received: 0, done: 0 };
   data.forEach(fields => {
     //console.log(fields);
     const status = fields.status?.stringValue || "";
-    const date = fields.receivedAt.timestampValue.split('T')[0];
+    const date = getDateFromISOString(fields.receivedAt.timestampValue).slice(0, 10);
+    //const date = fields.receivedAt.timestampValue.split('T')[0];
     if (!stats[date]) stats[date] = { all:0, error: 0, received: 0, done: 0 };
     const request = fields.request.mapValue.fields;
     const error = fields.error.mapValue.fields;
@@ -364,6 +502,7 @@ function getStatusData() {
       stats[date].error++;
       stats_sum.error++;
       listData_error.push({
+        docId: fields.docId,
         receivedAt: getDateFromISOString(fields.receivedAt.timestampValue),
         name: request?.displayName?.stringValue ?? "名称未設定",
         userMessage: request.userMessage?.stringValue ? request.userMessage?.stringValue : "(nothing)",
@@ -377,6 +516,7 @@ function getStatusData() {
       stats[date].received++;
       stats_sum.received++;
       listData_received.push({
+        docId: fields.docId,
         receivedAt: getDateFromISOString(fields.receivedAt.timestampValue),
         name: request?.displayName?.stringValue ?? "名称未設定",
         userMessage: request.userMessage?.stringValue ? request.userMessage?.stringValue : "(nothing)",
@@ -391,7 +531,7 @@ function getStatusData() {
   Object.keys(stats).sort().forEach(date => {
     chartData.push([date, stats[date].all, stats[date].error, stats[date].received, stats[date].done]);
   });
-  if (!stats[fromto.now_isoString.split('T')[0]]) stats[fromto.now_isoString.split('T')[0]] = { all:0, error: 0, received: 0, done: 0 };
+  if (!stats[fromto.date_to_formatted.slice(0, 10)]) stats[fromto.date_to_formatted.slice(0, 10)] = { all:0, error: 0, received: 0, done: 0 };
 
   // パーセンテージ
   var chartData2 = [
@@ -435,7 +575,23 @@ function getRawFirestoreData(queryPayload) {
   // ※結果が空の場合は [{}] のような形で返ることがあるためフィルタリング
   return results
     .filter(result => result.document)
+    .map(result => {
+      // fields（データ本体）を展開し、そこに docId を追加して返す
+      const fields = result.document.fields;
+      const fullPath = result.document.name;
+      const docId = fullPath.split('/').pop(); // パスの最後からIDを抽出
+
+      return {
+        docId: docId,      // ドキュメントID
+        namePath: fullPath, // フルパスが必要な場合はこれも保持
+        ...fields           // 既存のフィールドデータを展開
+      };
+    });
+  /*
+  return results
+    .filter(result => result.document)
     .map(result => result.document.fields);
+  */
 }
 /*
 function getRawFirestoreData() {
@@ -463,7 +619,7 @@ function getRecordCountFirestoreData(queryPayload) {
   const results = JSON.parse(response.getContentText());
   // 結果の取り出し（aggregationResultsという配列の中に数値が入ってきます）
   const count = results[0].result.aggregateFields.total_count;
-  console.log("該当レコード数: " + count);
+  //console.log("該当レコード数: " + count);
   return Number(count.integerValue);
 }
 
@@ -478,6 +634,21 @@ function getIsoFromDate(val) {
 function getDateFromISOString(val){
   var dateObj = new Date(val);
   return Utilities.formatDate(dateObj, "JST", "yyyy-MM-dd HH:mm:ss");
+}
+
+function getFromTo(date_from, date_to) {
+  const toDate = new Date(date_to);
+  const endDate = new Date(toDate.setHours(23, 59, 59, 999));
+  var date_from_formatted =getFormattedDate(date_from);
+  var date_from_isoString = getIsoFromDate(date_from);
+  var date_to_formatted =getFormattedDate(endDate);
+  var date_to_isoString = getIsoFromDate(endDate);
+  return {
+    date_from_formatted: date_from_formatted,
+    date_from_isoString: date_from_isoString,
+    date_to_formatted: date_to_formatted,
+    date_to_isoString: date_to_isoString
+  };
 }
 
 function getOneMonthAgo() {
@@ -504,10 +675,10 @@ function getOneMonthAgo() {
   var oneMonthAgo_isoString = getIsoFromDate(oneMonthAgo);
 
   return {
-    now_formatted: now_formatted,
-    oneMonthAgo_formatted: oneMonthAgo_formatted,
-    now_isoString: now_isoString,
-    oneMonthAgo_isoString: oneMonthAgo_isoString
+    date_from_formatted: oneMonthAgo_formatted,
+    date_from_isoString: oneMonthAgo_isoString,
+    date_to_formatted: now_formatted,
+    date_to_isoString: now_isoString
   };
 }
 
@@ -534,14 +705,14 @@ function setQueryFromTo(fromto){
             fieldFilter: {
               field: { fieldPath: "receivedAt" },
               op: "GREATER_THAN_OR_EQUAL",
-              value: { timestampValue: fromto.oneMonthAgo_isoString }
+              value: { timestampValue: fromto.date_from_isoString }
             }
           },
           {
             fieldFilter: {
               field: { fieldPath: "receivedAt" },
               op: "LESS_THAN_OR_EQUAL",
-              value: { timestampValue: fromto.now_isoString }
+              value: { timestampValue: fromto.date_to_isoString }
             }
           }
         ]
@@ -570,14 +741,14 @@ function setQueryRecordCount(fromto, filters) {
       fieldFilter: {
         field: { fieldPath: "receivedAt" },
         op: "GREATER_THAN_OR_EQUAL",
-        value: { timestampValue: fromto.oneMonthAgo_isoString }
+        value: { timestampValue: fromto.date_from_isoString }
       }
     });
     myFilters.push({
       fieldFilter: {
         field: { fieldPath: "receivedAt" },
         op: "LESS_THAN_OR_EQUAL",
-        value: { timestampValue: fromto.now_isoString }
+        value: { timestampValue: fromto.date_to_isoString }
       }
     });
   }
@@ -596,7 +767,7 @@ function setQueryRecordCount(fromto, filters) {
     };
   }
 
-  console.log(myFilters);
+  //console.log(myFilters);
   return queryPayload = {
     structuredAggregationQuery: {
       structuredQuery: structuredQuery,

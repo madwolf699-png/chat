@@ -6,7 +6,7 @@
       body { font-family: 'Helvetica Neue', Arial, sans-serif; padding: 20px; text-align: center; color: #333; }
       .screen { display: none; }
       .active { display: block; }
-      .nav-bar { background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #ddd; }
+      .nav-bar { background: #f8f9fa; padding: 10px; border-radius: 8px; margin-bottom: 0px; border: 1px solid #ddd; }
       select, button { padding: 10px; border-radius: 4px; border: 1px solid #ccc; cursor: pointer; }
       button { background-color: #4285F4; color: white; border: none; margin: 5px; }
       button.secondary { background-color: #34a853; }
@@ -15,7 +15,7 @@
       #loading { color: #666; height: 20px; visibility: hidden; }
       .table-container {
           width: 100%;
-          max-width: 900px;
+          /*max-width: 900px;*/
           background: white;
           border-radius: 12px;
           box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05);
@@ -59,7 +59,7 @@
           white-space: nowrap;
           color: #718096;
           font-size: 0.85rem;
-          width: 150px;
+          width: 180px;
       }
       .col-name {
           font-weight: 500;
@@ -91,6 +91,48 @@
           color: #e53e3e;
           border: 1px solid #feb2b2;
       }
+      .side_by_side {
+        display: flex;       /* これで横並びになります */
+        flex-wrap: wrap;    /* これが「入りきらないなら下へ」の指示 */
+        width: 100%;
+        clear: both; /* もし上が float 属性なら、これで回り込みを解除できます */
+        margin-top: 0px; /* 上の要素との間に余白を作る */
+        padding: 0px;
+        /*background-color: #00ffff;*/
+        /*background-color: #fff;*/ /* 背景色を指定して、下の要素を隠さないようにする */
+        /*border: 1px solid #ddd;*/
+        /*border-radius: 8px;*/
+        align-items: stretch; /* 子要素の高さを揃える */
+        /*gap: 10px;*/           /* 要素間の隙間（任意） */
+      }
+      .side_by_side_box {
+        /* flex: 1 1 300px; 
+          意味：伸びる(1)、縮む(1)、ベースの幅は300px
+          画面幅が 300px * 2 = 600px（+隙間）を切ると縦に並びます
+        */
+        /*flex: 1 1 300px; */
+        /*height: 100px;*/
+        flex: 1;
+        min-width: 240px; /* 前述の通り、これより狭くなると縦並びになります */
+        /*background-color: #f0f0f0;*/
+        margin-top: 4px; /* 上の要素との間に余白を作る */
+        padding: 0px;
+      }
+      /* 統計データの4つを包んでいるコンテナ */
+      .side_by_side_ > .side_by_side_box:first-child {
+        display: flex;
+        flex-direction: column; /* 縦に並べる */
+        /*justify-content: space-between;*/ /* ★これが重要：上下いっぱいに均等配置 */
+        justify-content: space-around; /* ★端に詰めすぎず、均等に余白を配置 */
+        padding: 20px 0; /* グラフの描画エリア（軸ラベルなど）に合わせて微調整 */
+      }
+
+      /* 2つずつ横に並んでいる行 */
+      .side_by_side_box_ .side_by_side {
+        display: flex;
+        justify-content: space-around; /* 左右の余白を均等に */
+        text-align: center;
+      }
     </style>
     <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
     <script type="text/javascript">
@@ -114,16 +156,16 @@
 
       // サマリ推移の取得
       function onSummaryChange() {
-        var selectEl = document.getElementById('keywordSelect');
-        var options = selectEl.options;
-        var keywordList = [];
-        // すべての選択肢（value）を配列に格納
-        for (var i = 0; i < options.length; i++) {
-          // 「該当なし」などを除外したい場合は if でフィルタリングも可能です
-          keywordList.push(options[i].value);
-        }
+        //console.log('onSummaryChange start');
         showLoading(true);
-        google.script.run.withSuccessHandler(drawSummary).getSummaryData(keywordList);
+        const select = document.getElementById('keywordSelect');
+        const options = select.options;
+        const keywords = [];
+        for (let i = 0; i < options.length; i++) {
+          //console.log("Value:", options[i].value, " Text:", options[i].text);
+          keywords.push({text: options[i].text, value: options[i].value});
+        }
+        google.script.run.withSuccessHandler(drawSummary).getSummaryData(keywords);
       }
 
       // キーワード推移の取得
@@ -146,45 +188,275 @@
       }
 
       function drawSummary(res) {
-        draw_chart_bar_normal('キーワード別の総集計', res.chartData_keyword, 'summary_chart_keyword_div');
-        draw_chart_bar_percent('回答別', res.chartData_answer, res.series_answer, 'summary_chart_answer_div');
-        draw_chart_bar_percent('異常終了', res.chartData_status, res.series_status, 'summary_chart_status_div');
-        draw_chart_bar_normal('質問者別の総集計', res.chartData_user, 'summary_chart_user_div');
+        //console.log(res);
+        draw_number_summary(res.request_num_to_today, 'summary_request_num_to_today_div');
+        draw_percent_summary((res.request_num_to_today / res.request_num_last_month) * 100, 'summary_request_num_last_month_div');
+        draw_number_summary(res.request_num_yesterday, 'summary_request_num_yesterday_div');
+        draw_percent_summary((res.request_num_yesterday / res.request_num_before_yesterday) * 100, 'summary_request_num_before_yesterday_div');
+        draw_number_summary(res.user_num_to_today, 'summary_user_num_to_today_div');
+        draw_percent_summary((res.user_num_to_today / res.user_num_last_month) * 100, 'summary_user_num_last_month_div');
+        draw_number_summary(res.request_num_last_week, 'summary_request_num_last_week_div');
+        draw_percent_summary((res.request_num_last_week / res.request_num_two_weeks_ago) * 100, 'summary_request_num_two_weeks_ago_div');
+/**/
+        res.chartData_last_week.shift();
+        var data = new google.visualization.DataTable();
+        data.addColumn('date', '日付');
+        data.addColumn('number', 'リクエスト数');
+        data.addColumn('number', 'リクエスト数(前の7日間)');
+        res.chartData_last_week.forEach(function(row) {
+          var dateStr = row[0]; // 日付文字列
+          var lastWeekVal = row[1]; // 今週の値
+          var twoWeeksAgoVal = row[2]; // 先週の値
+          var parts = dateStr.split('-');
+          var dateObj = new Date(parts[0], parts[1] - 1, parts[2]);
+          data.addRow([dateObj, lastWeekVal, twoWeeksAgoVal]);
+        });
+        // 日付順に並び替え（オブジェクトのキー順がバラバラな場合に備えて）
+        //data.sort([{column: 0}]);
+        draw_chart_line(
+          '過去７日間のリクエスト数の推移', 
+          'top', 
+          true, 
+          true, 
+          data, 
+          'summary_chart_last_week_div'
+          );
+/**/
+        //console.log(res.pieChart_keyword_last_week);
+        draw_chart_pie('過去７日間のリクエスト数におけるキーワードヒットの割合', 'right', res.pieChart_keyword_last_week, 'summary_pieChart_keyword_last_week_div');
+        draw_chart_pie('前の７日間', 'none', res.pieChart_keyword_two_weeks_ago, 'summary_pieChart_keyword_two_weeks_ago_div');
+
+        //console.log(res.pieChart_answer_last_week);
+        draw_chart_pie('過去７日間のリクエスト数における回答の割合', 'right', res.pieChart_answer_last_week, 'summary_pieChart_answer_last_week_div');
+        draw_chart_pie('前の７日間', 'none', res.pieChart_answer_two_weeks_ago, 'summary_pieChart_answer_two_weeks_ago_div');
+
+        draw_chart_pie('過去７日間のリクエスト数におけるエラーの割合', 'right', res.pieChart_status_last_week, 'summary_pieChart_status_last_week_div');
+        draw_chart_pie('前の７日間', 'none', res.pieChart_status_two_weeks_ago, 'summary_pieChart_status_two_weeks_ago_div');
+
+        showLoading(false);
+        var timer = 0;
+        window.addEventListener('resize', function() {
+          if (timer > 0) {
+            clearTimeout(timer);
+          }
+          timer = setTimeout(function() {
+            draw_chart_line(
+              '過去７日間のリクエスト数の推移', 
+              'top', 
+              true, 
+              true, 
+              data, 
+              'summary_chart_last_week_div'
+              );
+            draw_chart_pie('過去７日間のリクエスト数におけるキーワードヒットの割合', 'right', res.pieChart_keyword_last_week, 'summary_pieChart_keyword_last_week_div');
+            draw_chart_pie('前の７日間', 'none', res.pieChart_keyword_two_weeks_ago, 'summary_pieChart_keyword_two_weeks_ago_div');
+            draw_chart_pie('過去７日間のリクエスト数における回答の割合', 'right', res.pieChart_answer_last_week, 'summary_pieChart_answer_last_week_div');
+            draw_chart_pie('前の７日間', 'none', res.pieChart_answer_two_weeks_ago, 'summary_pieChart_answer_two_weeks_ago_div');
+            draw_chart_pie('過去７日間のリクエスト数におけるエラーの割合', 'right', res.pieChart_status_last_week, 'summary_pieChart_status_last_week_div');
+            draw_chart_pie('前の７日間', 'none', res.pieChart_status_two_weeks_ago, 'summary_pieChart_status_two_weeks_ago_div');
+          }, 200); // 0.2秒間リサイズが止まったら描画
+        });
       }
 
       function drawKeyword(res) {
         draw_fromto(res.fromto, 'keyword_fromto_div');
-        draw_chart_line(res.title, res.chartData, 'keyword_chart_div');
-        draw_chart_bar_percent(res.keyword, res.chartData2, res.series, 'keyword_chart2_div');
-        draw_list(res.listData, 'keyword_list_div');
+
+        res.chartData.shift();
+        var data_line = new google.visualization.DataTable();
+        data_line.addColumn('date', '日付');
+        data_line.addColumn('number', 'リクエスト数');
+        data_line.addColumn('number', res.keyword);
+        res.chartData.forEach(function(row) {
+          var dateStr = row[0]; // 日付文字列
+          var sum_all = row[1];
+          var sum_keyword = row[2];
+          var parts = dateStr.split('-');
+          var dateObj = new Date(parts[0], parts[1] - 1, parts[2]);
+          data_line.addRow([dateObj, sum_all, sum_keyword]);
+        });
+        draw_chart_line(
+          res.title, 
+          'top', 
+          true, 
+          false, 
+          data_line, 
+          'keyword_chart_div'
+        );
+
+        draw_chart_bar_percent(
+          res.keyword, 
+          res.chartData2, 
+          res.series, 
+          'keyword_chart2_div'
+        );
+        draw_list(false, res.listData, 'keyword_list_div');
+
+        showLoading(false);
+        var timer = 0;
+        window.addEventListener('resize', function() {
+          if (timer > 0) {
+            clearTimeout(timer);
+          }
+          timer = setTimeout(function() {
+            draw_chart_line(
+              res.title, 
+              'top', 
+              true, 
+              false, 
+              data_line, 
+              'keyword_chart_div'
+            );
+            draw_chart_bar_percent(
+              res.keyword, 
+              res.chartData2, 
+              res.series, 
+              'keyword_chart2_div'
+            );
+          }, 200); // 0.2秒間リサイズが止まったら描画
+        });
       }
 
       function drawAnswer(res) {
         draw_fromto(res.fromto, 'answer_fromto_div');
-        draw_chart_line(res.title, res.chartData, 'answer_chart_div');
-        draw_chart_bar_percent('回答別', res.chartData2, res.series, 'answer_chart2_div');
-        draw_list(res.listData_no, 'answer_list_no_div');
-        draw_list(res.listData_other, 'answer_list_other_div');
+
+        res.chartData.shift();
+        var data_line = new google.visualization.DataTable();
+        data_line.addColumn('date', '日付');
+        data_line.addColumn('number', '全件');
+        data_line.addColumn('number', 'はい');
+        data_line.addColumn('number', 'いいえ');
+        data_line.addColumn('number', '未回答');
+        res.chartData.forEach(function(row) {
+          var dateStr = row[0]; // 日付文字列
+          var parts = dateStr.split('-');
+          var dateObj = new Date(parts[0], parts[1] - 1, parts[2]);
+          data_line.addRow([dateObj, row[1], row[2], row[3], row[4]]);
+        });
+        draw_chart_line(
+          res.title, 
+          'top', 
+          true, 
+          false, 
+          data_line, 
+          'answer_chart_div'
+        );
+
+        draw_chart_bar_percent(
+          '回答別', 
+          res.chartData2, 
+          res.series, 
+          'answer_chart2_div'
+        );
+        draw_list(true, res.listData_no, 'answer_list_no_div');
+        draw_list(false, res.listData_other, 'answer_list_other_div');
         //draw_chart_bar_percent(res.chartData3, res.series, 'answer_chart3_div');
+
+        showLoading(false);
+        var timer = 0;
+        window.addEventListener('resize', function() {
+          if (timer > 0) {
+            clearTimeout(timer);
+          }
+          timer = setTimeout(function() {
+            draw_chart_line(
+              res.title, 
+              'top', 
+              true, 
+              false, 
+              data_line, 
+              'answer_chart_div'
+            );
+            draw_chart_bar_percent(
+              '回答別', 
+              res.chartData2, 
+              res.series, 
+              'answer_chart2_div'
+            );
+          }, 200); // 0.2秒間リサイズが止まったら描画
+        });
       }
 
       function drawStatus(res) {
         draw_fromto(res.fromto, 'status_fromto_div');
-        draw_chart_line(res.title, res.chartData, 'status_chart_div');
-        draw_chart_bar_percent('異常終了別', res.chartData2, res.series, 'status_chart2_div');
-        draw_list(res.listData_error, 'status_list_error_div');
-        draw_list(res.listData_received, 'status_list_received_div');
+
+        res.chartData.shift();
+        var data_line = new google.visualization.DataTable();
+        data_line.addColumn('date', '日付');
+        data_line.addColumn('number', '全件');
+        data_line.addColumn('number', 'error');
+        data_line.addColumn('number', 'else');
+        data_line.addColumn('number', 'done');
+        res.chartData.forEach(function(row) {
+          var dateStr = row[0]; // 日付文字列
+          var parts = dateStr.split('-');
+          var dateObj = new Date(parts[0], parts[1] - 1, parts[2]);
+          data_line.addRow([dateObj, row[1], row[2], row[3], row[4]]);
+        });
+        draw_chart_line(
+          res.title, 
+          'top', 
+          true, 
+          false, 
+          data_line, 
+          'status_chart_div'
+        );
+
+        draw_chart_bar_percent(
+          '異常終了別', 
+          res.chartData2, 
+          res.series, 
+          'status_chart2_div'
+        );
+        draw_list(false, res.listData_error, 'status_list_error_div');
+        draw_list(false, res.listData_received, 'status_list_received_div');
         //draw_chart_bar_percent(res.chartData3, res.series, 'status_chart3_div');
+
+        showLoading(false);
+        var timer = 0;
+        window.addEventListener('resize', function() {
+          if (timer > 0) {
+            clearTimeout(timer);
+          }
+          timer = setTimeout(function() {
+          draw_chart_line(
+            res.title, 
+            'top', 
+            true, 
+            false, 
+            data_line, 
+            'status_chart_div'
+          );
+            draw_chart_bar_percent(
+              '異常終了別', 
+              res.chartData2, 
+              res.series, 
+              'status_chart2_div'
+            );
+          }, 200); // 0.2秒間リサイズが止まったら描画
+        });
       }
 
       function draw_fromto(res, divId) {
         var fromto = document.getElementById(divId);
-        fromto.innerHTML = res.oneMonthAgo_formatted + "　～　" + res.now_formatted;
+        fromto.innerHTML = res.date_from_formatted.slice(0, 10) + "　～　" + res.date_to_formatted.slice(0, 10);
+      }
+
+      function draw_number_summary(value, divId) {
+        var doc = document.getElementById(divId);
+        doc.innerHTML = new Intl.NumberFormat('ja-JP').format(value);
+      }
+
+      function draw_percent_summary(value, divId) {
+        var doc = document.getElementById(divId);
+        doc.innerHTML = new Intl.NumberFormat('ja-JP',
+          {
+            minimumFractionDigits: 1,
+            maximumFractionDigits: 1,
+          }).format(value) + '%';
       }
 
       function draw_chart_bar_normal(title, data, divId) {
-        showLoading(false);
-        console.log(data);
+        //console.log(data);
         var chartData = google.visualization.arrayToDataTable(data);
         var finalHeight = Math.max((data.length - 1) * 45 + 100, 400);
         document.getElementById(divId).style.height = finalHeight + 'px';
@@ -225,28 +497,85 @@
         chart.draw(chartData, options);
       }
 
-      function draw_chart_line(title, data, divId) {
-        showLoading(false);
-        var chartData = google.visualization.arrayToDataTable(data);
+      function draw_chart_line(
+        title, 
+        legend, 
+        isDay, 
+        isDayOfWeek, 
+        data, 
+        divId
+        ) {
+        var chartData = (data instanceof google.visualization.DataTable) ? data : google.visualization.arrayToDataTable(data);
+
+        // 1. データテーブルからユニークな日付を取得
+        var distinctValues = chartData.getDistinctValues(0);
+        var ticks = distinctValues;
+        // 2. 表示用ラベル（ticks）の配列を作成
+        if (isDay) {
+          ticks = distinctValues.map(function(date) {
+            // 日本語の曜日配列
+            var days = ['日', '月', '火', '水', '木', '金', '土'];
+            // 表示形式を作成（例：02/02\n(月)）
+            // \n を入れることで日付の下に曜日が配置されます
+            var label = (date.getMonth() + 1) + '/' + date.getDate();
+            if (isDayOfWeek) {
+              label += '\n' + '(' + days[date.getDay()] + ')';
+            }
+            return { v: date, f: label };
+          });
+        }
+
         var options = {
           title: title,
+          titleTextStyle: {
+            color: '#0066cc', // ここで色を指定（例：赤）
+            fontSize: 12,     // 必要に応じてサイズも変更可能
+            bold: true        // 太字にする設定
+          },
+          fontSize: 11,
           curveType: 'function',
-          legend: { position: 'bottom' },
-          hAxis: { title: '日付', slantedText: true },
-          vAxis: { title: '件数', minValue: 0, format: '0' },
+          legend: { 
+            position: legend 
+          },
+          hAxis: { 
+            title: '', 
+            slantedText: false, 
+            //format: 'MM/dd\n(E)', 
+            gridlines: { count: -1 }, 
+            ticks: ticks
+          },
+          vAxis: { 
+            title: '', 
+            minValue: 0, 
+            format: '0', 
+            viewWindow: { min: 0} 
+          },
           pointSize: 7,
-          animation: { startup: true, duration: 500, easing: 'out' }
+          animation: { 
+            startup: true, 
+            duration: 500, 
+            easing: 'out' 
+          }
         };
         var chart = new google.visualization.LineChart(document.getElementById(divId));
         chart.draw(chartData, options);
       }
 
-      function draw_chart_bar_percent(title, data, series, divId) {
-        showLoading(false);
-        console.log(data);
+      function draw_chart_bar_percent(
+        title, 
+        data, 
+        series, 
+        divId
+        ) {
+        //console.log(data);
         var chartData = google.visualization.arrayToDataTable(data);
         var options = {
           title: '全体に対する' + title + 'の割合',
+          titleTextStyle: {
+            color: '#0066cc', // ここで色を指定（例：赤）
+            fontSize: 12,     // 必要に応じてサイズも変更可能
+            bold: true        // 太字にする設定
+          },
           width: "100%",
           height: 200,
           legend: { position: 'top', maxLines: 3 },
@@ -261,16 +590,46 @@
         chart.draw(chartData, options);
       }
 
-      function draw_list(data, divId) {
-        showLoading(false);
-        var listData = '<div class="table-container">';
+      function draw_chart_pie(
+        title,
+        legend,
+        data, 
+        divId) {
+        //console.log(data);
+        var chartData = google.visualization.arrayToDataTable(data);
+        var options = {
+          title: title,
+          titleTextStyle: {
+            color: '#0066cc', // ここで色を指定（例：赤）
+            fontSize: 12,     // 必要に応じてサイズも変更可能
+            bold: true        // 太字にする設定
+          },
+          fontSize: 11,
+          //width: 240,
+          //height: 240,
+          pieHole: 0,
+          legend: { position: legend, maxLines: 3 },
+        };
+        var chart = new google.visualization.PieChart(document.getElementById(divId));
+        chart.draw(chartData, options);
+      }
+
+      function draw_list(
+        isReason, 
+        data, 
+        divId
+        ) {
+        var listData = '<div class="table-container" style="width:100%;">';
         listData += '    <table>';
         listData += '        <thead>';
         listData += '            <tr>';
-        listData += '                <th style="width: 110px;">受信日時</th>';
+        listData += '                <th style="width: 140px;">receivedAt</th>';
         listData += '                <th style="width: 110px;">name</th>';
         listData += '                <th style="width: auto;">Message</th>';
         listData += '                <th style="">Content</th>';
+        if (isReason){
+          listData += '                <th style="">Reason</th>';
+        }
         /*
         listData += '                <th style="width: 25%;">受信日時</th>';
         listData += '                <th style="width: 50%;">name</th>';
@@ -281,12 +640,15 @@
         listData += '        </thead>';
         listData += '        <tbody>';
         data.forEach(fields => {
-          console.log(fields);
+          //console.log(fields);
           listData += '            <tr>';
-          listData += '                <td class="col-date">' + fields.receivedAt + '</td>';
+          listData += '                <td class="col-date">' + fields.docId + '<br>' + fields.receivedAt + '</td>';
           listData += '                <td class="col-name">' + fields.name + '</td>';
           listData += '                <td class="col-message">' + fields.userMessage + '</td>';
           listData += '                <td><span class="error-tag status-none">' + fields.content + '</span></td>';
+          if (isReason){
+            listData += '                <td><span class="error-tag status-none">' + fields.reason + '</span></td>';
+          }
           listData += '            </tr>';
         });
         listData += '        </tbody>';
@@ -301,7 +663,7 @@
       }
 
       // 初回起動時
-      google.charts.setOnLoadCallback(() => showScreen('menu_screen'));
+      google.charts.setOnLoadCallback(() => showScreen('summary_screen'));
 
       // ダウンロード
       function handleDownload() {
@@ -349,41 +711,81 @@
     <h1>SUN専用チャット 統計ダッシュボード</h1>
     <div id="loading">集計中...</div>
 
-    <div id="menu_screen" class="screen active">
-      <div class="nav-bar">
-        <p>表示したい統計データを選択してください</p>
-        <button class="btn" style="background-color: #663300;" onclick="showScreen('summary_screen')">サマリ</button>
-        <button onclick="showScreen('keyword_screen')">キーワード別の推移</button>
-        <button class="secondary" onclick="showScreen('answer_screen')">問題解決の回答傾向の推移</button>
-        <button class="tertiary" onclick="showScreen('status_screen')">異常終了の推移</button>
-        <button class="btn" style="background-color: gray;" id="downloadBtn" onclick="handleDownload()">データのダウンロード</button>
-        <p id="msg"></p>
+    <div id="summary_screen" class="screen active">
+      <div class="">
+        <div class="nav-bar">
+          <!-- p>表示したい統計データを選択してください</p -->
+          <button onclick="showScreen('keyword_screen')">キーワード別の推移</button>
+          <button class="secondary" onclick="showScreen('answer_screen')">問題解決の回答傾向の推移</button>
+          <button class="tertiary" onclick="showScreen('status_screen')">異常終了の推移</button>
+          <button class="btn" style="background-color: gray;" id="downloadBtn" onclick="handleDownload()">データのダウンロード</button>
+          <p id="msg"></p>
+        </div>
       </div>
-    </div>
 
-    <div id="summary_screen" class="screen">
-      <div class="nav-bar">
-        <button class="back" onclick="showScreen('menu_screen')">← 戻る</button>
-        <span style="font-weight: bold; margin-left: 10px;">サマリ</span>
+      <div class="side_by_side">
+        <div class="side_by_side_box">
+          <div class="side_by_side">
+            <div class="side_by_side_box" style="height:120px;">
+              <font style="color:#0066cc; font-size:12px;">今月初めから今日までのリクエスト数</font>
+              <div id="summary_request_num_to_today_div" style="width: 100%; color:#0066cc; font-size:24px; font-weight:bold;"></div>
+              <div id="summary_request_num_last_month_div" style="width: 100%; color:#009966; font-size:12px;"></div>
+            </div>
+            <div class="side_by_side_box" style="height:120px;">
+              <font style="color:#0066cc; font-size:12px;">昨日のリクエスト数</font>
+              <div id="summary_request_num_yesterday_div" style="width: 100%; color:#0066cc; font-size:24px; font-weight:bold;"></div>
+              <div id="summary_request_num_before_yesterday_div" style="width: 100%; color:#009966; font-size:12px;"></div>
+            </div>
+          </div>
+          <div class="side_by_side">
+            <div class="side_by_side_box" style="height:120px;">
+              <font style="color:#0066cc; font-size:12px;">今月初めから今日までの総ユーザ数</font>
+              <div id="summary_user_num_to_today_div" style="width: 100%; color:#0066cc; font-size:24px; font-weight:bold;"></div>
+              <div id="summary_user_num_last_month_div" style="width: 100%; color:#009966; font-size:12px;"></div>
+            </div>
+            <div class="side_by_side_box" style="height:120px;">
+              <font style="color:#0066cc; font-size:12px;">過去１週間のリクエスト数</font>
+              <div id="summary_request_num_last_week_div" style="width: 100%; color:#0066cc; font-size:24px; font-weight:bold;"></div>
+              <div id="summary_request_num_two_weeks_ago_div" style="width: 100%; color:#009966; font-size:12px;"></div>
+            </div>
+          </div>
+        </div>
+        <div class="side_by_side_box">
+          <div id="summary_chart_last_week_div" style="width: 100%; height: 240px; "></div>
+        </div>
       </div>
-      <center>
-      <div class="nav-bar">キーワード別</div>
-      <div id="summary_chart_keyword_div" style="width: 100%; height:auto;"></div>
-      <hr>
-      <div class="nav-bar">問題解決の回答別</div>
-      <div id="summary_chart_answer_div" style="width: 100%; height:auto;"></div>
-      <hr>
-       <div class="nav-bar">異常終了別</div>
-       <div id="summary_chart_status_div" style="width: 100%; height:auto;"></div>
-      <hr>
-       <div class="nav-bar">質問者別</div>
-       <div id="summary_chart_user_div" style="width: 100%; height:auto;"></div>
-      </center>
+
+      <div class="side_by_side">
+        <div class="side_by_side_box">
+              <div id="summary_pieChart_keyword_last_week_div" style="width: 100%; height: 320px;"></div>
+        </div>
+        <div class="side_by_side_box">
+              <div id="summary_pieChart_keyword_two_weeks_ago_div" style="width: 100%; height: 320px;"></div>
+        </div>
+      </div>
+
+      <div class="side_by_side">
+        <div class="side_by_side_box">
+              <div id="summary_pieChart_answer_last_week_div" style="width: 100%; height: 320px;"></div>
+        </div>
+        <div class="side_by_side_box">
+              <div id="summary_pieChart_answer_two_weeks_ago_div" style="width: 100%; height: 320px;"></div>
+        </div>
+      </div>
+
+      <div class="side_by_side">
+        <div class="side_by_side_box">
+              <div id="summary_pieChart_status_last_week_div" style="width: 100%; height: 320px;"></div>
+        </div>
+        <div class="side_by_side_box">
+              <div id="summary_pieChart_status_two_weeks_ago_div" style="width: 100%; height: 320px;"></div>
+        </div>
+      </div>
     </div>
 
     <div id="keyword_screen" class="screen">
       <div class="nav-bar">
-        <button class="back" onclick="showScreen('menu_screen')">← 戻る</button>
+        <button class="back" onclick="showScreen('summary_screen')">← 戻る</button>
         <span> キーワード別の推移: </span>
         <select id="keywordSelect" onchange="onKeywordChange()">
           <!-- option value="すべて">すべて</option -->
@@ -426,7 +828,7 @@
 
     <div id="answer_screen" class="screen">
       <div class="nav-bar">
-        <button class="back" onclick="showScreen('menu_screen')">← 戻る</button>
+        <button class="back" onclick="showScreen('summary_screen')">← 戻る</button>
         <span style="font-weight: bold; margin-left: 10px;">問題解決の回答傾向の推移</span>
       </div>
       <center>
@@ -453,7 +855,7 @@
 
     <div id="status_screen" class="screen">
       <div class="nav-bar">
-        <button class="back" onclick="showScreen('menu_screen')">← 戻る</button>
+        <button class="back" onclick="showScreen('summary_screen')">← 戻る</button>
         <span style="font-weight: bold; margin-left: 10px;">異常終了の推移</span>
       </div>
       <center>
