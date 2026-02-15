@@ -133,6 +133,59 @@
         justify-content: space-around; /* 左右の余白を均等に */
         text-align: center;
       }
+      .loading {
+        position: fixed;
+        top: 0;
+        left:0;
+        z-index: 1000;
+        width: 100vw;
+        height: 100vh;
+        background-color: rgba(0, 0, 0, 0.5);
+        /*background-color: #1082ce;*/
+        display: flex;
+        flex-direction: column;
+        aligin-items: center;
+        justify-content: center;
+      }
+      .loading.hide {
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 500ms;
+      }
+      .loading-wrap {
+        position: abolute;
+        left: 0;
+        right: 0;
+        margin: auto;
+        height: 20px;
+      }
+      .loading-text {
+        color: #FFF;
+        font-size: 30px;
+        font-weight: 700;
+        margin-bottom: 30px;
+        text-align: center;
+        width: 100%;
+      }
+      .spinner {
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        border: 3px solid #FFF;
+        border-left-color: #1082ce; 
+        /* アニメーションを1秒かけて実行 */
+        animation: spinner-rotation 1s linear infinite;
+        margin: 0 auto;
+      }
+      /* アニメーションの設定 */
+      @keyframes spinner-rotation {
+        0% {
+          transform: rotate(0);
+        }
+        100% {
+          transform: rotate(360deg);
+        }
+      }
     </style>
     <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
     <script type="text/javascript">
@@ -222,6 +275,31 @@
           'summary_chart_last_week_div'
           );
 /**/
+/**/
+        res.chartData_last_week_user.shift();
+        var data_user = new google.visualization.DataTable();
+        data_user.addColumn('date', '日付');
+        data_user.addColumn('number', 'ユーザ数');
+        data_user.addColumn('number', 'ユーザ数(前の7日間)');
+        res.chartData_last_week_user.forEach(function(row) {
+          var dateStr = row[0]; // 日付文字列
+          var lastWeekVal = row[1]; // 今週の値
+          var twoWeeksAgoVal = row[2]; // 先週の値
+          var parts = dateStr.split('-');
+          var dateObj = new Date(parts[0], parts[1] - 1, parts[2]);
+          data_user.addRow([dateObj, lastWeekVal, twoWeeksAgoVal]);
+        });
+        // 日付順に並び替え（オブジェクトのキー順がバラバラな場合に備えて）
+        //data.sort([{column: 0}]);
+        draw_chart_line(
+          '過去７日間のユーザ数の推移', 
+          'top', 
+          true, 
+          true, 
+          data_user, 
+          'summary_chart_last_week_user_div'
+          );
+/**/
         //console.log(res.pieChart_keyword_last_week);
         draw_chart_pie('過去７日間のリクエスト数におけるキーワードヒットの割合', 'right', res.pieChart_keyword_last_week, 'summary_pieChart_keyword_last_week_div');
         draw_chart_pie('前の７日間', 'none', res.pieChart_keyword_two_weeks_ago, 'summary_pieChart_keyword_two_weeks_ago_div');
@@ -247,6 +325,14 @@
               true, 
               data, 
               'summary_chart_last_week_div'
+              );
+            draw_chart_line(
+              '過去７日間のユーザ数の推移', 
+              'top', 
+              true, 
+              true, 
+              data_user, 
+              'summary_chart_last_week_user_div'
               );
             draw_chart_pie('過去７日間のリクエスト数におけるキーワードヒットの割合', 'right', res.pieChart_keyword_last_week, 'summary_pieChart_keyword_last_week_div');
             draw_chart_pie('前の７日間', 'none', res.pieChart_keyword_two_weeks_ago, 'summary_pieChart_keyword_two_weeks_ago_div');
@@ -659,7 +745,13 @@
       }
 
       function showLoading(isLoading) {
-        document.getElementById('loading').style.visibility = isLoading ? 'visible' : 'hidden';
+        //document.getElementById('loading').style.visibility = isLoading ? 'visible' : 'hidden';
+        const loading = document.querySelector('.loading');
+        if (!isLoading) {
+          loading.classList.add('hide')
+        } else {
+          loading.classList.remove('hide')
+        }
       }
 
       // 初回起動時
@@ -709,7 +801,11 @@
   </head>
   <body>
     <h1>SUN専用チャット 統計ダッシュボード</h1>
-    <div id="loading">集計中...</div>
+    <!-- div id="loading">集計中...</div -->
+    <div class="loading">
+      <p class="loading-text">Loading...</p>
+      <div class="spinner"></div>
+    </div>
 
     <div id="summary_screen" class="screen active">
       <div class="">
@@ -751,7 +847,8 @@
           </div>
         </div>
         <div class="side_by_side_box">
-          <div id="summary_chart_last_week_div" style="width: 100%; height: 240px; "></div>
+          <div id="summary_chart_last_week_div" style="width: 100%; height: 210px; "></div>
+          <div id="summary_chart_last_week_user_div" style="width: 100%; height: 210px; "></div>
         </div>
       </div>
 
