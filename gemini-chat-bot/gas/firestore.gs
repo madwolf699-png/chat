@@ -215,23 +215,9 @@ function getSummaryData(keywords) {
   // 過去７日間(前の７日間)のリクエスト数におけるエラーの割合
   let sum_status_two_weeks_ago = { error: 0, else:0, done: 0 };
   data_two_weeks_ago.forEach(fields => {
-    const date = getDateFromISOString(fields.receivedAt.timestampValue);
-    //const date = fields.receivedAt.timestampValue.split('T')[0];
-    const d2 = new Date(date);
-    // getDay() は 曜日を 0〜6 の数値で返す (0:日, 1:月, 2:火...)
-    const day2_num = d2.getDay();
-    let isoString = fromto_last_week.date_from_isoString;
-    for (let i = 0; i < 7; i++) {
-      const d1 = new Date(getDateFromISOString(isoString));
-      const day1_num = d1.getDay();
-      if (day1_num === day2_num) stats[d1.slice(0, 10)].two_weeks_ago++;
-      // 1. ISO文字列をDateオブジェクトに変換
-      let date = new Date(isoString);
-      // 2. 1日加算する
-      date.setDate(date.getDate() + 1);
-      // 3. 再びISO文字列に変換して上書き
-      isoString = date.toISOString();
-    }
+    const date_prev = new Date(fields.receivedAt.timestampValue);
+    const after7day = new Date(date_prev.getFullYear(), date_prev.getMonth(), date_prev.getDate() + 7);
+    stats[getDateFromISOString(after7day).slice(0, 10)].two_weeks_ago++;
 
     // 過去７日間(前の７日間)のリクエスト数におけるキーワードヒットの割合
     const response = fields.response?.stringValue || "(nothing)";

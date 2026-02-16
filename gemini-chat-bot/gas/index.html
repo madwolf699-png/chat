@@ -302,14 +302,14 @@
 /**/
         //console.log(res.pieChart_keyword_last_week);
         draw_chart_pie('過去７日間のリクエスト数におけるキーワードヒットの割合', 'right', res.pieChart_keyword_last_week, 'summary_pieChart_keyword_last_week_div');
-        draw_chart_pie('前の７日間', 'none', res.pieChart_keyword_two_weeks_ago, 'summary_pieChart_keyword_two_weeks_ago_div');
+        draw_chart_pie('前の７日間', 'right', res.pieChart_keyword_two_weeks_ago, 'summary_pieChart_keyword_two_weeks_ago_div');
 
         //console.log(res.pieChart_answer_last_week);
         draw_chart_pie('過去７日間のリクエスト数における回答の割合', 'right', res.pieChart_answer_last_week, 'summary_pieChart_answer_last_week_div');
-        draw_chart_pie('前の７日間', 'none', res.pieChart_answer_two_weeks_ago, 'summary_pieChart_answer_two_weeks_ago_div');
+        draw_chart_pie('前の７日間', 'right', res.pieChart_answer_two_weeks_ago, 'summary_pieChart_answer_two_weeks_ago_div');
 
         draw_chart_pie('過去７日間のリクエスト数におけるエラーの割合', 'right', res.pieChart_status_last_week, 'summary_pieChart_status_last_week_div');
-        draw_chart_pie('前の７日間', 'none', res.pieChart_status_two_weeks_ago, 'summary_pieChart_status_two_weeks_ago_div');
+        draw_chart_pie('前の７日間', 'right', res.pieChart_status_two_weeks_ago, 'summary_pieChart_status_two_weeks_ago_div');
 
         showLoading(false);
         var timer = 0;
