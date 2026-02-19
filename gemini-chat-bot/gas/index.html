@@ -335,11 +335,11 @@
               'summary_chart_last_week_user_div'
               );
             draw_chart_pie('過去７日間のリクエスト数におけるキーワードヒットの割合', 'right', res.pieChart_keyword_last_week, 'summary_pieChart_keyword_last_week_div');
-            draw_chart_pie('前の７日間', 'none', res.pieChart_keyword_two_weeks_ago, 'summary_pieChart_keyword_two_weeks_ago_div');
+            draw_chart_pie('前の７日間', 'right', res.pieChart_keyword_two_weeks_ago, 'summary_pieChart_keyword_two_weeks_ago_div');
             draw_chart_pie('過去７日間のリクエスト数における回答の割合', 'right', res.pieChart_answer_last_week, 'summary_pieChart_answer_last_week_div');
-            draw_chart_pie('前の７日間', 'none', res.pieChart_answer_two_weeks_ago, 'summary_pieChart_answer_two_weeks_ago_div');
+            draw_chart_pie('前の７日間', 'right', res.pieChart_answer_two_weeks_ago, 'summary_pieChart_answer_two_weeks_ago_div');
             draw_chart_pie('過去７日間のリクエスト数におけるエラーの割合', 'right', res.pieChart_status_last_week, 'summary_pieChart_status_last_week_div');
-            draw_chart_pie('前の７日間', 'none', res.pieChart_status_two_weeks_ago, 'summary_pieChart_status_two_weeks_ago_div');
+            draw_chart_pie('前の７日間', 'right', res.pieChart_status_two_weeks_ago, 'summary_pieChart_status_two_weeks_ago_div');
           }, 200); // 0.2秒間リサイズが止まったら描画
         });
       }
@@ -881,6 +881,16 @@
     </div>
 
     <div id="keyword_screen" class="screen">
+      <div class="">
+        <div class="nav-bar">
+          <!-- p>表示したい統計データを選択してください</p -->
+          <button class="secondary" onclick="showScreen('answer_screen')">問題解決の回答傾向の推移</button>
+          <button class="tertiary" onclick="showScreen('status_screen')">異常終了の推移</button>
+          <button class="btn" style="background-color: gray;" id="downloadBtn" onclick="handleDownload()">データのダウンロード</button>
+          <p id="msg"></p>
+        </div>
+      </div>
+
       <div class="nav-bar">
         <button class="back" onclick="showScreen('summary_screen')">← 戻る</button>
         <span> キーワード別の推移: </span>
@@ -924,6 +934,16 @@
     </div>
 
     <div id="answer_screen" class="screen">
+      <div class="">
+        <div class="nav-bar">
+          <!-- p>表示したい統計データを選択してください</p -->
+          <button onclick="showScreen('keyword_screen')">キーワード別の推移</button>
+          <button class="tertiary" onclick="showScreen('status_screen')">異常終了の推移</button>
+          <button class="btn" style="background-color: gray;" id="downloadBtn" onclick="handleDownload()">データのダウンロード</button>
+          <p id="msg"></p>
+        </div>
+      </div>
+
       <div class="nav-bar">
         <button class="back" onclick="showScreen('summary_screen')">← 戻る</button>
         <span style="font-weight: bold; margin-left: 10px;">問題解決の回答傾向の推移</span>
@@ -951,6 +971,16 @@
     </div>
 
     <div id="status_screen" class="screen">
+      <div class="">
+        <div class="nav-bar">
+          <!-- p>表示したい統計データを選択してください</p -->
+          <button onclick="showScreen('keyword_screen')">キーワード別の推移</button>
+          <button class="secondary" onclick="showScreen('answer_screen')">問題解決の回答傾向の推移</button>
+          <button class="btn" style="background-color: gray;" id="downloadBtn" onclick="handleDownload()">データのダウンロード</button>
+          <p id="msg"></p>
+        </div>
+      </div>
+
       <div class="nav-bar">
         <button class="back" onclick="showScreen('summary_screen')">← 戻る</button>
         <span style="font-weight: bold; margin-left: 10px;">異常終了の推移</span>
