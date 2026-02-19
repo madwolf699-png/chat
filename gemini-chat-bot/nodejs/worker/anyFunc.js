@@ -69,6 +69,9 @@ const chatAuth = new google.auth.GoogleAuth({
     "https://www.googleapis.com/auth/chat.messages.create",
   ]
 });
+const authClient = await chatAuth.getClient();
+const credentials = await chatAuth.getCredentials();
+const chatApi = google.chat({ version: 'v1', auth: authClient });
 
 /* ========= Google Sheets ========= */
 const embedModel = genAI.getGenerativeModel({
@@ -226,7 +229,7 @@ export async function searchRules(rules, question) {
 export async function sendToChat(spaceName, { text, cardsV2 }) {
   console.log("###### sendToChat start ######");
   //console.log("------ 回答 -----\n", text);
-  const authClient = await chatAuth.getClient();
+  //const authClient = await chatAuth.getClient();
   const accessToken = await authClient.getAccessToken();
 
   const body = {};
@@ -382,6 +385,137 @@ export async function saveAnswer(docId, answer) {
   */
 }
 
+export function setReceivingPayload(spaceName, threadName) {
+  console.log("###### setReceivingPayload start ######");
+  //console.log("spaceName =", spaceName);
+  //console.log("threadName =", threadName);
+  //const docId = String(docRef.id);
+  return (
+    {
+      parent: spaceName, // "spaces/XXXXX" の形式
+      requestBody: {
+        // スレッドを維持する場合に指定
+        thread: { name: threadName }, 
+        cardsV2: [
+          {
+            cardId: "receiving_" + Date.now(),
+            card: {
+              /**/
+              header: {
+                title: "確認中です。少々お待ちください...",
+                //subtitle: "しばらくお待ちください...",
+                // 処理中を示すGIFのURL（一般公開されているもの）
+                imageUrl: "https://www.google.com/images/spin-32.gif", 
+                //imageUrl: "https://i.gifer.com/ZZ5H.gif", 
+                //imageUrl: "https://upload.wikimedia.org/wikipedia/commons/b/b1/Loading_icon.gif", 
+                imageType: "CIRCLE",
+                /*
+                icon: {
+                  knownIcon: "CLOCK" // 処理中は時計
+                }
+                */
+              },
+              /*
+              sections: [
+                {
+                  widgets: [
+                    {
+                      // テキストの色は変えられないが、装飾的なテキスト（HTMLタグの一部が使用可能）
+                      textParagraph: { text: "<b><font color=\"#ff9900\">⏳ 確認中です。少々お待ちください...</font></b>" }
+                    }
+                  ]
+                }
+              ]
+              */
+            }
+          }
+        ],
+        //text: "⌛ **確認中です。少々お待ちください...**",
+      }
+    }
+  );
+}
+
+export function setReceivedPayload(response) {
+  console.log("###### setReceivedPayload start ######");
+  //console.log("spaceName =", spaceName);
+  //console.log("threadName =", threadName);
+  //const docId = String(docRef.id);
+  return (
+    {
+      name: response.data.name,
+      updateMask: "cardsV2", // どのフィールドを上書きするか指定
+      requestBody: {
+        cardsV2: [
+          {
+            cardId: "received_" + Date.now(),
+            card: {
+              /**/
+              header: {
+                title: "✅ 確認完了",
+                //subtitle: "正常に終了しました",
+                // 完了を示すアイコン
+                //imageUrl: "https://fonts.gstatic.com/s/i/short-term/release/googlestandardicons/check_circle/v1/24px.svg",
+                //imageType: "CIRCLE",
+                /*
+                iconProperty: {
+                  knownIcon: "TICKET" // または適したアイコン
+                }
+                */
+              },
+              /**/
+              /*
+              sections: [
+                {
+                  widgets: [
+                    {
+                    // 完了時は色をイメージさせる絵文字や太字を活用
+                    textParagraph: { text: "✅ <b><font color=\"#00ff00\">確認完了！</font></b>" }
+                    }, 
+                  ]
+                } 
+              ]
+              */
+            }
+          }           
+        ] // カードを消してテキストのみにする
+      }
+    }
+  );
+}
+
+export function setAnswerPayload(response, answer) {
+  console.log("###### setAnswerPayload start ######");
+  //console.log("spaceName =", spaceName);
+  //console.log("threadName =", threadName);
+  //const docId = String(docRef.id);
+  return (
+    {
+      name: response.data.name,
+      updateMask: "text,cardsV2", // どのフィールドを上書きするか指定
+      requestBody: {
+        cardsV2: [
+          /*
+          {
+            cardId: "received_" + Date.now(),
+            card: {
+              header: {
+                title: "✅ 以下に回答します。",
+                //subtitle: "正常に終了しました",
+                // 完了を示すアイコン
+                //imageUrl: "https://fonts.gstatic.com/s/i/short-term/release/googlestandardicons/check_circle/v1/24px.svg",
+                //imageType: "CIRCLE",
+              },
+            }
+          }
+          */           
+        ],
+        text: answer,
+      }
+    }
+  );
+}
+
 export function setCardPayload(spaceName, threadName, docRef) {
   console.log("###### setCardPayload start ######");
   console.log("docRef.id =", docRef.id);
@@ -399,7 +533,7 @@ export function setCardPayload(spaceName, threadName, docRef) {
             cardId: "confirm_" + Date.now(),
             card: {
               header: {
-                title: "回答リクエスト",
+                title: "返答リクエスト",
                 subtitle: "この問題は解決しましたか？",
               },
               sections: [
@@ -451,19 +585,65 @@ export async function sendChatCard(payload) {
   console.log("###### sendChatCard start ######");
   // 1. 認証設定 (ADC: Application Default Credentials を使用)
   // Cloud Run上であれば自動でサービスアカウントが使用されます
-  const authClient = await chatAuth.getClient();
-  const credentials = await chatAuth.getCredentials();
+  //const authClient = await chatAuth.getClient();
+  //const credentials = await chatAuth.getCredentials();
   // サービスアカウントのメールアドレス（client_email）を表示
   //console.log("------ 使用中のサービスアカウント:", credentials.client_email);
 
-  const chat = google.chat({ version: 'v1', auth: authClient });
+  //const chat = google.chat({ version: 'v1', auth: authClient });
   // 2. cardsV2 レスポンスの構築
   // 3. メッセージの送信
   try {
-    const response = await chat.spaces.messages.create(payload);
+    const response = await chatApi.spaces.messages.create(payload);
     console.log('Message sent:', response.data.name);
+    return response;
   } catch (error) {
     console.error('Error sending message to Google Chat:', error);
+    return null;
+  }
+}
+
+export async function updateChatCard(payload) {
+  console.log("###### updateChatCard start ######");
+  // 1. 認証設定 (ADC: Application Default Credentials を使用)
+  // Cloud Run上であれば自動でサービスアカウントが使用されます
+  //const authClient = await chatAuth.getClient();
+  //const credentials = await chatAuth.getCredentials();
+  // サービスアカウントのメールアドレス（client_email）を表示
+  //console.log("------ 使用中のサービスアカウント:", credentials.client_email);
+
+  //const chat = google.chat({ version: 'v1', auth: authClient });
+  // 2. cardsV2 レスポンスの構築
+  // 3. メッセージの送信
+  try {
+    const response = await chatApi.spaces.messages.patch(payload);
+    console.log('Message patch:', response.data.name);
+    return response;
+  } catch (error) {
+    console.error('Error patching message to Google Chat:', error);
+    return null;
+  }
+}
+
+export async function deleteChatCard(payload) {
+  console.log("###### deleteChatCard start ######");
+  // 1. 認証設定 (ADC: Application Default Credentials を使用)
+  // Cloud Run上であれば自動でサービスアカウントが使用されます
+  //const authClient = await chatAuth.getClient();
+  //const credentials = await chatAuth.getCredentials();
+  // サービスアカウントのメールアドレス（client_email）を表示
+  //console.log("------ 使用中のサービスアカウント:", credentials.client_email);
+
+  //const chat = google.chat({ version: 'v1', auth: authClient });
+  // 2. cardsV2 レスポンスの構築
+  // 3. メッセージの送信
+  try {
+    const response = await chatApi.spaces.messages.delete(payload);
+    console.log('Message delete:', response.data.name);
+    return response;
+  } catch (error) {
+    console.error('Error deleting message to Google Chat:', error);
+    return null;
   }
 }
 
@@ -509,17 +689,17 @@ export async function sendToWebhook(docId) {
   const receivedAt = doc.receivedAt.toDate();
   const msg = `
 回答「いいえ」に対する理由が入力されました。\n
-■ID
+====== ID ======
 ${docId}\n
-■受信日時
+====== 受信日時 ======
 ${receivedAt.toLocaleString('ja-JP')}\n
-■氏名
+====== 氏名 ======
 ${doc.request.displayName}\n
-■質問
+====== 質問 ======
 ${doc.request.userMessage}\n
-■回答
+====== 回答 ======
 ${doc.response}\n
-■いいえの理由
+====== いいえの理由 ======
 ${doc.reason}\n
 `;
 

@@ -43,7 +43,7 @@ app.post("/",  async (req, res) => {
           "actionResponse": {
             "type": "UPDATE_MESSAGE"
           },
-          "text": "回答ありがとうございました。"
+          "text": "返答ありがとうございました。"
         });
       } else if (action.actionMethodName === 'handle_no') {
         res.json(setReasonPayload(params.docId));
@@ -52,24 +52,26 @@ app.post("/",  async (req, res) => {
       res.json({
         "renderActions": {
           "actionStatus": {
-            "userFacingMessage": "回答ありがとうございました。"
+            "userFacingMessage": "返答ありがとうございました。"
           }
         }
       });
       */
     } else if (event.type === "MESSAGE") {
+      /**/
+      res
+      .status(200)
+      .set("Content-Type", "application/json")
+      .send("{}");
+      /**/
+      /*
       res
       .status(200)
       .set("Content-Type", "application/json")
       .send({"text": "確認中です。少々お待ちください。"});
+      */
     }
 
-    /*
-    res
-    .status(200)
-    .set("Content-Type", "application/json")
-    .send("{}");
-    */
   } catch (err) {
     console.error(err);
     return res.json({

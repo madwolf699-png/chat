@@ -8,6 +8,9 @@ import {
   saveChat,
   geminiApi,
   sendToChat,
+  setReceivingPayload,
+  setAnswerPayload,
+  updateChatCard,
   setCardPayload,
   sendChatCard,
   saveAnswer,
@@ -66,14 +69,14 @@ app.post("/", async(req, res) => {
         "actionResponse": {
           "type": "UPDATE_MESSAGE"
         },
-        "text": "回答ありがとうございました。"
+        "text": "返答ありがとうございました。"
       });
       */
       /*
       res.json({
         "renderActions": {
           "actionStatus": {
-            "userFacingMessage": "回答ありがとうございました。"
+            "userFacingMessage": "返答ありがとうございました。"
           }
         }
       });
@@ -96,6 +99,7 @@ app.post("/", async(req, res) => {
         await sendToChat(spaceName, "Message or space missing");
       }
 
+      const response = await sendChatCard(setReceivingPayload(spaceName, threadName));
       //await sendToChat(spaceName, { text: "確認中です。少々お待ちください。" });
       docRef = null;
       /* --- Spreadsheet から補足情報を取得 --- */
@@ -105,8 +109,12 @@ app.post("/", async(req, res) => {
       const related  = await searchRules(rules, userMessage);
       //console.log("------ related ------\n", related);
       answer = await geminiApi(related, userMessage);
+
+      await updateChatCard(setAnswerPayload(response, answer));
+     //await deleteChatCard({name: response.data.name});
+      
       /* --- Chat API で後送 --- */
-      await sendToChat(spaceName, { text: answer });
+      //await sendToChat(spaceName, { text: answer });
       docRef = await saveChat(receivedAt, messagePayload, answer, null, "done");
       await sendChatCard(setCardPayload(spaceName, threadName, docRef));
       //res.status(204).send(); // Pub/Sub ACK
