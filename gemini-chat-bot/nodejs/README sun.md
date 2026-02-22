@@ -207,9 +207,14 @@ sudo apt install npm
    ├  ├ package.json
    ├  └ Dockerfile
    ├ external/
+   ├  ├ index.js        ← ★ここに SpreadSheet Reload の処理を書く
+   ├  ├ package.json
+   ├  └ Dockerfile
+   ├ job7days/
        ├ index.js        ← ★ここに SpreadSheet Reload の処理を書く
        ├ package.json
        └ Dockerfile
+
   ```
 - ⑤ Node.js（Cloud Run 用）コードを書く
   ```bash
@@ -512,4 +517,33 @@ sudo apt install npm
   export WEBHOOK_URL=
   export TARGET_URL=https://chat-worker-617913681837.asia-northeast1.run.app/reload
   export GOOGLE_APPLICATION_CREDENTIALS=~/sun-internal-chat-5cb5315565ce.json
+  export FIRESTORE_SUMMARY=7days_summary
+  ```
+
+## Cloud Runによる開発(ジョブ（集計用）)
+  ```bash
+  cd gemini-chat-bot/nodejs/7days
+  gcloud run jobs deploy job-7days \
+    --source . \
+    --tasks 1 \
+    --max-retries 3 \
+    --region asia-northeast1 \
+    --set-env-vars \
+    FIRESTORE_DOC=chat_logs,FIRESTORE_SUMMARY=7days_summary
+  ```
+  ```bash
+  以下はとりあえず不要
+  gcloud iam service-accounts add-iam-policy-binding \
+    617913681837-compute@developer.gserviceaccount.com \
+    --member="user:hnishimura@sun21.co.jp" \
+    --role="roles/iam.serviceAccountUser" \
+    --project sun-internal-chat
+  ```
+  ```bash
+  gcloud scheduler jobs create http job-7days-schedule \
+    --location asia-northeast1 \
+    --schedule "0 1 * * 1" \
+    --uri "https://asia-northeast1-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/sun-internal-chat/jobs/job-7days:run" \
+    --http-method POST \
+    --oauth-service-account-email "617913681837-compute@developer.gserviceaccount.com"
   ```
