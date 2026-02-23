@@ -1,5 +1,6 @@
 const PROJECT_ID = "sun-internal-chat";
 const COLLECTION_NAME = "chat_logs";
+const COLLECTION_NAME_7DAYS_SUMMARY = "7days_summary";
 
 // ウェブアプリにアクセスしたときに実行される
 function doGet() {
@@ -59,10 +60,12 @@ function getSummaryData(keywords) {
   // 今月初めから今日までのリクエスト数
   //------------------------------------------------------------------------------
   var request_num_to_today = getRecordCountFirestoreData(setQueryRecordCount(
+    COLLECTION_NAME,
     fromto_to_today,
     null
     ));
   var request_num_last_month = getRecordCountFirestoreData(setQueryRecordCount(
+    COLLECTION_NAME,
     fromto_last_month,
     null
     ));
@@ -71,10 +74,12 @@ function getSummaryData(keywords) {
   // 昨日のリクエスト数
   //------------------------------------------------------------------------------
   var request_num_yesterday = getRecordCountFirestoreData(setQueryRecordCount(
+    COLLECTION_NAME,
     fromto_yesterday,
     null
     ));
   var request_num_before_yesterday = getRecordCountFirestoreData(setQueryRecordCount(
+    COLLECTION_NAME,
     fromto_beforeYesterday,
     null
     ));
@@ -83,7 +88,7 @@ function getSummaryData(keywords) {
   // 今月初めから今日までの総ユーザ数
   // 対象範囲で全件取得して「氏名」で重複排除する。
   //------------------------------------------------------------------------------
-  let data = getRawFirestoreData(setQueryFromTo(fromto_to_today));
+  let data = getRawFirestoreData(setQueryFromTo(COLLECTION_NAME, fromto_to_today));
   let users = data.flatMap(doc => {
     const nameField = doc.request.mapValue.fields?.displayName;
     // nameFieldが { stringValue: "ユーザー名" } という構造なら .stringValue を取る
@@ -92,7 +97,7 @@ function getSummaryData(keywords) {
   let distinctUsers = [...new Set(users)];
   var user_num_to_today = distinctUsers.length;
 
-  data = getRawFirestoreData(setQueryFromTo(fromto_last_month));
+  data = getRawFirestoreData(setQueryFromTo(COLLECTION_NAME, fromto_last_month));
   users = data.flatMap(doc => {
     const nameField = doc.request.mapValue.fields?.displayName;
     // nameFieldが { stringValue: "ユーザー名" } という構造なら .stringValue を取る
@@ -102,210 +107,33 @@ function getSummaryData(keywords) {
   var user_num_last_month = distinctUsers.length;
 
   //------------------------------------------------------------------------------
-  // 過去１週間のリクエスト数
+  // 過去１週間の集計を取得
   //------------------------------------------------------------------------------
-  var request_num_last_week = getRecordCountFirestoreData(setQueryRecordCount(
-    fromto_last_week,
-    null
-    ));
-  var request_num_two_weeks_ago = getRecordCountFirestoreData(setQueryRecordCount(
-    fromto_two_weeks_ago,
-    null
-    ));
+  let request_num_last_week = 0;
+  let request_num_two_weeks_ago = 0;
+  let chartData_last_week = [];
+  let chartData_last_week_user = [];
+  let pieChart_keyword_last_week = [];
+  let pieChart_keyword_two_weeks_ago = [];
+  let pieChart_answer_last_week = [];
+  let pieChart_answer_two_weeks_ago = [];
+  let pieChart_status_last_week = [];
+  let pieChart_status_two_weeks_ago = [];
 
-  //------------------------------------------------------------------------------
-  // 過去７日間のリクエスト数の推移
-  //------------------------------------------------------------------------------
-  let data_last_week = getRawFirestoreData(setQueryFromTo(fromto_last_week));
-  let data_two_weeks_ago = getRawFirestoreData(setQueryFromTo(fromto_two_weeks_ago));
-  const stats = {};
-  stats[fromto_last_week.date_from_formatted.slice(0, 10)] = { last_week:0, two_weeks_ago: 0 };
-
-  let isoString = fromto_last_week.date_from_isoString;
-  for (let i = 0; i < 6; i++) {
-    // 1. ISO文字列をDateオブジェクトに変換
-    let date = new Date(isoString);
-    // 2. 1日加算する
-    date.setDate(date.getDate() + 1);
-    // 3. 再びISO文字列に変換して上書き
-    isoString = date.toISOString();
-    //console.log(`${i + 1}日後: ${isoString}`);
-    stats[getDateFromISOString(isoString).slice(0, 10)] = { last_week:0, two_weeks_ago: 0 };
-  }
-
-  // 過去７日間のリクエスト数におけるキーワードヒットの割合
-  let sum_keyword_last_week_all = 0;
-  let sum_keyword_last_week = {};
-  for (let i = 0; i < keywords.length; i++) {
-    let val = keywords[i].value;
-    sum_keyword_last_week[val] = 0;
-  }
-  // 過去７日間のリクエスト数における回答の割合
-  let sum_answer_last_week = { yes: 0, no:0, other: 0 };
-  // 過去７日間のリクエスト数におけるエラーの割合
-  let sum_status_last_week = { error: 0, else:0, done: 0 };
-  data_last_week.forEach(fields => {
-    const date = getDateFromISOString(fields.receivedAt.timestampValue);
-    //const date = fields.receivedAt.timestampValue.split('T')[0];
-    stats[date.slice(0, 10)].last_week++;
-
-    // 過去７日間のリクエスト数におけるキーワードヒットの割合
-    const response = fields.response?.stringValue || "(nothing)";
-    sum_keyword_last_week_all++;
-    for (let i = 0; i < keywords.length; i++) {
-      let val = keywords[i].value;
-      if (response.includes(val)) {
-        sum_keyword_last_week[val]++;
-      }
-    }
-    // 過去７日間のリクエスト数における回答の割合
-    const answer = fields.answer?.stringValue || "";
-    if (answer === "yes") {
-      sum_answer_last_week.yes++;
-    } else if (answer === "no") {
-      sum_answer_last_week.no++;
-    } else {
-      sum_answer_last_week.other++;
-    }
-    // 過去７日間のリクエスト数におけるエラーの割合
-    const status = fields.status?.stringValue || "";
-    if (status === "error") {
-      sum_status_last_week.error++;
-    } else if (status === "done") {
-      sum_status_last_week.done++;
-    } else {
-      sum_status_last_week.else++;
-    }
+  data = getRawFirestoreData(setQueryFromTo_summary(COLLECTION_NAME_7DAYS_SUMMARY, getFromTo(fromto_last_week.date_from_formatted, fromto_last_week.date_to_formatted)));
+  data.forEach(fields => {
+    request_num_last_week = fields.request_num_last_week.integerValue;
+    request_num_two_weeks_ago = fields.request_num_two_weeks_ago.integerValue;
+    chartData_last_week = JSON.parse(fields.chartData_last_week.stringValue);
+    chartData_last_week_user = JSON.parse(fields.chartData_last_week_user.stringValue);
+    pieChart_keyword_last_week = JSON.parse(fields.pieChart_keyword_last_week.stringValue);
+    pieChart_keyword_two_weeks_ago = JSON.parse(fields.pieChart_keyword_two_weeks_ago.stringValue);
+    pieChart_answer_last_week = JSON.parse(fields.pieChart_answer_last_week.stringValue);
+    pieChart_answer_two_weeks_ago = JSON.parse(fields.pieChart_answer_two_weeks_ago.stringValue);
+    pieChart_status_last_week = JSON.parse(fields.pieChart_status_last_week.stringValue);
+    pieChart_status_two_weeks_ago = JSON.parse(fields.pieChart_status_two_weeks_ago.stringValue);
   });
-  // 過去７日間のリクエスト数におけるキーワードヒットの割合
-  let entries_sum_last_week = Object.entries(sum_keyword_last_week);
-  entries_sum_last_week.sort((a, b) => {
-    return b[1] - a[1]; // bの値 - aの値 が正ならbを前に持ってくる
-  });
-  let top10_sum_last_week = entries_sum_last_week.slice(0, 10);
-  const pieChart_keyword_last_week = [['キーワード', '数']];
-  top10_sum_last_week.forEach(row => {
-    sum_keyword_last_week_all -= row[1];
-    pieChart_keyword_last_week.push([row[0], row[1]]);
-  });
-  // 過去７日間のリクエスト数における回答の割合
-  const pieChart_answer_last_week = [
-    ['回答', '数'],
-    ['はい', sum_answer_last_week.yes],
-    ['いいえ', sum_answer_last_week.no],
-    ['未回答', sum_answer_last_week.other],
-  ];
-  // 過去７日間のリクエスト数におけるエラーの割合
-  const pieChart_status_last_week = [
-    ['error', '数'],
-    ['error', sum_status_last_week.error],
-    ['else', sum_status_last_week.else],
-    ['done', sum_status_last_week.done],
-  ];
-
-  // 過去７日間(前の７日間)のリクエスト数におけるキーワードヒットの割合
-  let sum_keyword_two_weeks_ago_all = 0;
-  let sum_keyword_two_weeks_ago = {};
-  for (let i = 0; i < keywords.length; i++) {
-    let val = keywords[i].value;
-    sum_keyword_two_weeks_ago[val] = 0;
-  }
-  // 過去７日間(前の７日間)のリクエスト数における回答の割合
-  let sum_answer_two_weeks_ago = { yes: 0, no:0, other: 0 };
-  // 過去７日間(前の７日間)のリクエスト数におけるエラーの割合
-  let sum_status_two_weeks_ago = { error: 0, else:0, done: 0 };
-  data_two_weeks_ago.forEach(fields => {
-    const date_prev = new Date(fields.receivedAt.timestampValue);
-    const after7day = new Date(date_prev.getFullYear(), date_prev.getMonth(), date_prev.getDate() + 7);
-    stats[getDateFromISOString(after7day).slice(0, 10)].two_weeks_ago++;
-
-    // 過去７日間(前の７日間)のリクエスト数におけるキーワードヒットの割合
-    const response = fields.response?.stringValue || "(nothing)";
-    sum_keyword_two_weeks_ago_all++;
-    for (let i = 0; i < keywords.length; i++) {
-      let val = keywords[i].value;
-      if (response.includes(val)) {
-        sum_keyword_two_weeks_ago[val]++;
-      }
-    }
-    // 過去７日間(前の７日間)のリクエスト数における回答の割合
-    const answer = fields.answer?.stringValue || "";
-    if (answer === "yes") {
-      sum_answer_two_weeks_ago.yes++;
-    } else if (answer === "no") {
-      sum_answer_two_weeks_ago.no++;
-    } else {
-      sum_answer_two_weeks_ago.other++;
-    }
-    // 過去７日間(前の７日間)のリクエスト数におけるエラーの割合
-    const status = fields.status?.stringValue || "";
-    if (status === "error") {
-      sum_status_two_weeks_ago.error++;
-    } else if (status === "done") {
-      sum_status_two_weeks_ago.done++;
-    } else {
-      sum_status_two_weeks_ago.else++;
-    }
-  });
-  // 過去７日間(前の７日間)のリクエスト数におけるキーワードヒットの割合
-  let entries_sum_two_weeks_ago = Object.entries(sum_keyword_two_weeks_ago);
-  entries_sum_two_weeks_ago.sort((a, b) => {
-    return b[1] - a[1]; // bの値 - aの値 が正ならbを前に持ってくる
-  });
-  let top10_sum_two_weeks_ago = entries_sum_two_weeks_ago.slice(0, 10);
-  const pieChart_keyword_two_weeks_ago = [['キーワード', '数']];
-  top10_sum_two_weeks_ago.forEach(row => {
-    sum_keyword_two_weeks_ago_all -= row[1];
-    pieChart_keyword_two_weeks_ago.push([row[0], row[1]]);
-  });
-  // 過去７日間(前の７日間)のリクエスト数における回答の割合
-  const pieChart_answer_two_weeks_ago = [
-    ['回答', '数'],
-    ['はい', sum_answer_two_weeks_ago.yes],
-    ['いいえ', sum_answer_two_weeks_ago.no],
-    ['未回答', sum_answer_two_weeks_ago.other],
-  ];
-  // 過去７日間(前の７日間)のリクエスト数におけるエラーの割合
-  const pieChart_status_two_weeks_ago = [
-    ['error', '数'],
-    ['error', sum_status_two_weeks_ago.error],
-    ['else', sum_status_two_weeks_ago.else],
-    ['done', sum_status_two_weeks_ago.done],
-  ];
-
-  // 過去７日間のリクエスト数の推移
-  const chartData_last_week = [["日付", "リクエスト数", "リクエスト数(前の7日間)"]];
-  const chartData_last_week_user = [["日付", "ユーザ数", "ユーザ数(前の7日間)"]];
-  const sortedDates = Object.keys(stats).sort();
-  sortedDates.forEach(date => {
-    chartData_last_week.push([date, stats[date].last_week, stats[date].two_weeks_ago]);
-
-    // 過去７日間のユーザ数の推移
-    let fromto_date = getFromTo(new Date(date), new Date(date));
-    let data = getRawFirestoreData(setQueryFromTo(fromto_date));
-    let users = data.flatMap(doc => {
-      const nameField = doc.request.mapValue.fields?.displayName;
-      // nameFieldが { stringValue: "ユーザー名" } という構造なら .stringValue を取る
-      return nameField?.stringValue ? [nameField.stringValue] : ['名称未設定'];
-    });
-    let distinctUsers = [...new Set(users)];
-    var user_num_to_date = distinctUsers.length;
-    // 過去７日間(前の７日間)のユーザ数の推移
-    // 一昨日
-    const convDate = new Date(date);
-    const before7day = new Date(convDate.getFullYear(), convDate.getMonth(), convDate.getDate() - 7);
-    fromto_date = getFromTo(before7day, before7day);
-    data = getRawFirestoreData(setQueryFromTo(fromto_date));
-    users = data.flatMap(doc => {
-      const nameField = doc.request.mapValue.fields?.displayName;
-      // nameFieldが { stringValue: "ユーザー名" } という構造なら .stringValue を取る
-      return nameField?.stringValue ? [nameField.stringValue] : ['名称未設定'];
-    });
-    distinctUsers = [...new Set(users)];
-    var user_num_to_date7 = distinctUsers.length;
-    chartData_last_week_user.push([date, user_num_to_date, user_num_to_date7]);
-  });
-
+  
   return {
     request_num_to_today: request_num_to_today,
     request_num_last_month: request_num_last_month,
@@ -317,12 +145,12 @@ function getSummaryData(keywords) {
     request_num_two_weeks_ago: request_num_two_weeks_ago,
     chartData_last_week: chartData_last_week,
     chartData_last_week_user: chartData_last_week_user,
-    pieChart_keyword_last_week,
-    pieChart_keyword_two_weeks_ago,
-    pieChart_answer_last_week,
-    pieChart_answer_two_weeks_ago,
-    pieChart_status_last_week,
-    pieChart_status_two_weeks_ago,
+    pieChart_keyword_last_week: pieChart_keyword_last_week,
+    pieChart_keyword_two_weeks_ago: pieChart_keyword_two_weeks_ago,
+    pieChart_answer_last_week: pieChart_answer_last_week,
+    pieChart_answer_two_weeks_ago: pieChart_answer_two_weeks_ago,
+    pieChart_status_last_week: pieChart_status_last_week,
+    pieChart_status_two_weeks_ago: pieChart_status_two_weeks_ago,
   };
 }
 
@@ -331,7 +159,7 @@ function getKeywordData(keyword) {
   //keyword = "該当なし";
   //console.log("keyword: ", keyword);
   const fromto = getOneMonthAgo();
-  const data = getRawFirestoreData(setQueryFromTo(fromto));
+  const data = getRawFirestoreData(setQueryFromTo(COLLECTION_NAME, fromto));
   const stats = {};
   let stats_sum = { keyword: 0, other: 0 };
   const listData = [];
@@ -410,7 +238,7 @@ function getKeywordData(keyword) {
 // パターン2：回答傾向（はい・いいえ・未回答）の集計
 function getAnswerData() {
   const fromto = getOneMonthAgo();
-  const data = getRawFirestoreData(setQueryFromTo(fromto));
+  const data = getRawFirestoreData(setQueryFromTo(COLLECTION_NAME, fromto));
   const stats = {};
   let stats_sum = { yes: 0, no:0, other: 0 };
   const listData_no = [];
@@ -488,7 +316,7 @@ function getAnswerData() {
 // パターン3：異常終了の集計
 function getStatusData() {
   const fromto = getOneMonthAgo();
-  const data = getRawFirestoreData(setQueryFromTo(fromto));
+  const data = getRawFirestoreData(setQueryFromTo(COLLECTION_NAME, fromto));
   const stats = {};
   let stats_sum = { error: 0, received: 0, done: 0 };
   const listData_error = [];
@@ -660,6 +488,23 @@ function getFromTo(date_from, date_to) {
   };
 }
 
+function getFromTo_noTime(date_from, date_to) {
+  const fromDate = new Date(date_from);
+  const startDate = new Date(fromDate.setHours(0, 0, 0, 000));
+  const toDate = new Date(date_to);
+  const endDate = new Date(toDate.setHours(0, 0, 0, 000));
+  var date_from_formatted = getFormattedDate(startDate);
+  var date_from_isoString = getIsoFromDate(startDate);
+  var date_to_formatted = getFormattedDate(endDate);
+  var date_to_isoString = getIsoFromDate(endDate);
+  return {
+    date_from_formatted: date_from_formatted,
+    date_from_isoString: date_from_isoString,
+    date_to_formatted: date_to_formatted,
+    date_to_isoString: date_to_isoString
+  };
+}
+
 function getOneMonthAgo() {
   var now = new Date();
   var oneMonthAgo = new Date();
@@ -691,11 +536,11 @@ function getOneMonthAgo() {
   };
 }
 
-function setQueryFromTo(fromto){
+function setQueryFromTo(collection_name, fromto){
   // 2. 検索範囲の設定（ISO8601形式の文字列）
   // 3. クエリ（JSON）の作成
   let structuredQuery = {
-    from: [{ collectionId: COLLECTION_NAME }],
+    from: [{ collectionId: collection_name }],
     orderBy: [
       {
         field: { fieldPath: "receivedAt" },
@@ -714,14 +559,14 @@ function setQueryFromTo(fromto){
             fieldFilter: {
               field: { fieldPath: "receivedAt" },
               op: "GREATER_THAN_OR_EQUAL",
-              value: { timestampValue: fromto.date_from_isoString }
+              value: { timestampValue: new Date(fromto.date_from_formatted).toISOString() }
             }
           },
           {
             fieldFilter: {
               field: { fieldPath: "receivedAt" },
               op: "LESS_THAN_OR_EQUAL",
-              value: { timestampValue: fromto.date_to_isoString }
+              value: { timestampValue: new Date(fromto.date_to_formatted).toISOString() }
             }
           }
         ]
@@ -735,9 +580,57 @@ function setQueryFromTo(fromto){
   };
 }
 
-function setQueryRecordCount(fromto, filters) {
+function setQueryFromTo_summary(collection_name, fromto){
+  // 2. 検索範囲の設定（ISO8601形式の文字列）
+  // 3. クエリ（JSON）の作成
   let structuredQuery = {
-    from: [{ collectionId: COLLECTION_NAME }],
+    from: [{ collectionId: collection_name }],
+    orderBy: [
+      {
+        field: { fieldPath: "from" },
+        direction: "ASCENDING"
+      }
+    ]
+  };
+
+  //console.log('fromto.date_from_formatted: ', new Date(fromto.date_from_formatted).toISOString() );
+  //console.log('fromto.date_to_formatted: ', new Date(fromto.date_to_formatted).toISOString() );
+
+  if (fromto) {
+    structuredQuery.where = 
+    {
+      compositeFilter: {
+        op: "AND",
+        filters: [
+          {
+            fieldFilter: {
+              field: { fieldPath: "from" },
+              //op: "EQUAL",
+              op: "GREATER_THAN_OR_EQUAL",
+              value: { timestampValue: new Date(fromto.date_from_formatted).toISOString() }
+            }
+          },
+          {
+            fieldFilter: {
+              field: { fieldPath: "to" },
+              op: "LESS_THAN_OR_EQUAL",
+              value: { timestampValue: new Date(fromto.date_to_formatted).toISOString() }
+            }
+          }
+        ]
+      }
+    };
+  }
+
+  // 3. 最終的なリクエスト用オブジェクトに含める
+  return queryPayload = {
+    structuredQuery: structuredQuery
+  };
+}
+
+function setQueryRecordCount(collection_name, fromto, filters) {
+  let structuredQuery = {
+    from: [{ collectionId: collection_name }],
   };
 
   let myFilters = [];
@@ -750,14 +643,14 @@ function setQueryRecordCount(fromto, filters) {
       fieldFilter: {
         field: { fieldPath: "receivedAt" },
         op: "GREATER_THAN_OR_EQUAL",
-        value: { timestampValue: fromto.date_from_isoString }
+        value: { timestampValue: new Date(fromto.date_from_formatted).toISOString() }
       }
     });
     myFilters.push({
       fieldFilter: {
         field: { fieldPath: "receivedAt" },
         op: "LESS_THAN_OR_EQUAL",
-        value: { timestampValue: fromto.date_to_isoString }
+        value: { timestampValue: new Date(fromto.date_to_formatted).toISOString() }
       }
     });
   }
@@ -794,7 +687,7 @@ function setQueryRecordCount(fromto, filters) {
 function getFirestoreDataForDownload() {
   // 1. Firestoreからデータを抽出（これまでのクエリ処理）
   //const fromto = getOneMonthAgo();
-  const rawData = getRawFirestoreData(setQueryFromTo(null));
+  const rawData = getRawFirestoreData(setQueryFromTo(COLLECTION_NAME, null));
   
 // 2. データの整形
   // rawData が null や空配列の場合を考慮し、map処理の前に存在確認をします
