@@ -352,10 +352,10 @@ function setQueryRecordCount(fromto, filters) {
   }
   if (fromto){
     myFilters.push(
-      { field: "receivedAt", op: ">=", value: Timestamp.fromDate(new Date(fromto.date_from_isoString)) }
+      { field: "receivedAt", op: ">=", value: Timestamp.fromDate(new Date(fromto.date_from_formatted)) }
     );
     myFilters.push(
-      { field: "receivedAt", op: "<=", value: Timestamp.fromDate(new Date(fromto.date_to_isoString)) }
+      { field: "receivedAt", op: "<=", value: Timestamp.fromDate(new Date(fromto.date_to_formatted)) }
     );
   }
 
@@ -367,10 +367,10 @@ function setQueryFromTo(fromto){
   let myFilters = [];
   if (fromto){
     myFilters.push(
-      { field: "receivedAt", op: ">=", value: Timestamp.fromDate(new Date(fromto.date_from_isoString)) }
+      { field: "receivedAt", op: ">=", value: Timestamp.fromDate(new Date(fromto.date_from_formatted)) }
     );
     myFilters.push(
-      { field: "receivedAt", op: "<=", value: Timestamp.fromDate(new Date(fromto.date_to_isoString)) }
+      { field: "receivedAt", op: "<=", value: Timestamp.fromDate(new Date(fromto.date_to_formatted)) }
     );
   }
 
